@@ -1,0 +1,715 @@
+/**
+ * PodDesigner.jsx
+ * Herramienta interactiva para diseñar PODs.
+ * Estado compartido via usePodDesignStore → impacta Dashboard, Pods, Rentabilidad.
+ */
+
+import { useState, useMemo, useCallback } from 'react'
+import { useTeamCostoNormalizadoData, useVentasDolarizadasData } from '../hooks/useSheetData'
+import useExchangeRate from '../hooks/useExchangeRate'
+import usePodDesignStore from '../store/usePodDesignStore'
+import { usePodMetrics } from '../hooks/usePodMetrics'
+import { formatUSD, formatPct } from '../utils/formatters'
+import { POD_COLORS } from '../utils/podColors'
+import OrgChartImporter from '../components/OrgChartImporter'
+import useSimulationStore from '../store/useSimulationStore'
+import { usePeriodValues } from '../hooks/useGlobalPeriod'
+
+// ── Constantes ────────────────────────────────────────────────────────────────
+const EXTRA_COLORS = [
+  '#F59E0B','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1',
+  '#EF4444','#22D3EE','#A78BFA','#FB923C','#34D399','#E879F9',
+]
+function getColor(id, index) {
+  return POD_COLORS[id] || EXTRA_COLORS[index % EXTRA_COLORS.length]
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function margenBg(pct) {
+  if (pct > 20)  return 'bg-success/10 text-success border-success/20'
+  if (pct >= 0)  return 'bg-warning/10 text-warning border-warning/20'
+  return 'bg-danger/10 text-danger border-danger/20'
+}
+function semaforo(pct) {
+  if (pct > 20)  return '🟢'
+  if (pct >= 0)  return '🟡'
+  return '🔴'
+}
+// ── Componente principal ──────────────────────────────────────────────────────
+export default function PodDesigner() {
+  const { data: teamRaw, source: teamSource, loading: loadingTeam } = useTeamCostoNormalizadoData()
+  const { data: ventasData, source: ventasSource, loading: loadingVentas } = useVentasDolarizadasData()
+  const { rate, refresh: refreshRate, rateData } = useExchangeRate()
+
+  // ── Store global ──────────────────────────────────────────────────────────
+  const store = usePodDesignStore()
+  const {
+    pods, assignments, clientAssignments, revenueOverrides,
+    addPod, removePod, renamePod,
+    assignMember, removeMember, setAllocation,
+    assignClient, removeClient,
+    setRevenueOverride, clearRevenueOverride,
+    setOverheadManual, clearOverheadManual,
+    resetAll, purgeOrphans,
+    _orphanedMembers, _orphanedClients,
+  } = store
+
+  const { podMetrics, globalMetrics, overheadUSD, overheadFromSheet, overheadManual } = usePodMetrics()
+
+  // ── Simulación: personas nuevas ────────────────────────────────────────────
+  const { newPeople, simMode } = useSimulationStore()
+
+  // ── Pool de datos ──────────────────────────────────────────────────────────
+  const teamPool = useMemo(() => {
+    const fromSheet = (teamRaw || []).filter(p => !p.esOverhead).map(p => ({
+      ...p,
+      costoUSD: Math.round((p.costoMensualARS || p.neto) / rate),
+    }))
+    // Agregar personas simuladas desde Equipo y Costos
+    const fromSim = newPeople.map(p => ({
+      nombre: p.nombre,
+      neto: p.neto,
+      costoMensualARS: p.neto,
+      costoUSD: Math.round(p.neto / rate),
+      _simulated: true,
+    }))
+    return [...fromSheet, ...fromSim]
+  }, [teamRaw, rate, newPeople])
+
+  // Periodo global
+  const { selectedMonth, periodLabel } = usePeriodValues()
+
+  const clientPool = useMemo(() => {
+    if (!ventasData || !selectedMonth) return []
+    return ventasData
+      .map(c => ({ nombre: c.nombre, tipo: c.tipo, revenue: c.ventaMensual?.[selectedMonth] || 0 }))
+      .filter(c => c.revenue > 0)
+      .sort((a, b) => b.revenue - a.revenue)
+  }, [ventasData, selectedMonth])
+
+  // ── Estado local UI ────────────────────────────────────────────────────────
+  const [poolTab, setPoolTab] = useState('equipo')
+  const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState(null)
+  const [editingName, setEditingName] = useState(null)
+  const [editingValue, setEditingValue] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null)
+  const [orgImporterOpen, setOrgImporterOpen] = useState(false)
+
+  // ── Pools filtrados ────────────────────────────────────────────────────────
+  const filteredTeam = useMemo(() =>
+    teamPool.filter(m => m.nombre.toLowerCase().includes(search.toLowerCase())),
+    [teamPool, search]
+  )
+  const filteredClients = useMemo(() =>
+    clientPool.filter(c => c.nombre.toLowerCase().includes(search.toLowerCase())),
+    [clientPool, search]
+  )
+
+  // ── Uso de miembros y clientes ─────────────────────────────────────────────
+  const memberUsage = useMemo(() => {
+    const usage = {}
+    Object.entries(assignments).forEach(([podId, members]) => {
+      members.forEach(m => {
+        if (!usage[m.nombre]) usage[m.nombre] = []
+        usage[m.nombre].push({ podId, allocation: m.allocation })
+      })
+    })
+    return usage
+  }, [assignments])
+
+  const clientUsage = useMemo(() => {
+    const usage = {}
+    Object.entries(clientAssignments).forEach(([podId, clients]) => {
+      clients.forEach(c => { usage[c.nombre] = podId })
+    })
+    return usage
+  }, [clientAssignments])
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+  const handleSelect = useCallback((item) => {
+    setSelected(prev => prev?.nombre === item.nombre && prev?.type === item.type ? null : item)
+  }, [])
+
+  const handleAssignToPod = useCallback((podId) => {
+    if (!selected) return
+    if (selected.type === 'team') {
+      assignMember(podId, selected)
+    } else if (selected.type === 'client') {
+      assignClient(podId, selected)
+    }
+    setSelected(null)
+  }, [selected, assignMember, assignClient])
+
+  const handleRevenueChange = useCallback((podId, value) => {
+    const num = parseInt(value.replace(/\D/g, '')) || 0
+    setRevenueOverride(podId, num)
+  }, [setRevenueOverride])
+
+  const startRename = useCallback((podId, currentName) => {
+    setEditingName(podId)
+    setEditingValue(currentName)
+  }, [])
+
+  const commitRename = useCallback(() => {
+    if (!editingName) return
+    const trimmed = editingValue.trim()
+    if (trimmed) renamePod(editingName, trimmed)
+    setEditingName(null)
+    setEditingValue('')
+  }, [editingName, editingValue, renamePod])
+
+  const handleAddPod = useCallback(() => {
+    addPod()
+  }, [addPod])
+
+  const handleDeletePod = useCallback((podId) => {
+    removePod(podId)
+    setConfirmDelete(null)
+  }, [removePod])
+
+  const handleReset = useCallback(() => {
+    resetAll()
+    setSelected(null)
+    setEditingName(null)
+    setConfirmDelete(null)
+  }, [resetAll])
+
+  const handleExport = useCallback(() => {
+    const data = { pods, podMetrics, globalMetrics, assignments, clientAssignments, exportedAt: new Date().toISOString() }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `zenda-pod-config-${new Date().toISOString().slice(0,10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [pods, podMetrics, globalMetrics, assignments, clientAssignments])
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  const isTargeting = !!selected
+
+  return (
+    <div className="space-y-4">
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-bold text-textPrimary">Diseñador de PODs</h1>
+          <p className="text-xs text-textSecondary mt-0.5">
+            Asigna equipo y clientes, renombra o agrega PODs. Los cambios se reflejan en toda la app.
+            {selected && (
+              <span className="ml-2 text-accent font-semibold animate-pulse">
+                → Click en un POD para asignar <strong>{selected.nombre}</strong>
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="flex gap-2 flex-shrink-0">
+          <button onClick={() => setOrgImporterOpen(true)}
+            className="px-3 py-2 text-xs font-semibold rounded-lg border-2 border-purple-300 text-purple-600 hover:bg-purple-50 transition-colors">
+            🏢 Importar Organigrama
+          </button>
+          <button onClick={handleAddPod}
+            className="px-3 py-2 text-xs font-semibold rounded-lg border-2 border-dashed border-accent text-accent hover:bg-accent/10 transition-colors">
+            + Agregar POD
+          </button>
+          <button onClick={handleReset}
+            className="px-3 py-2 text-xs font-medium border border-gray-200 rounded-lg text-textSecondary hover:bg-gray-50 transition-colors">
+            Resetear
+          </button>
+          <button onClick={handleExport}
+            className="px-3 py-2 text-xs font-semibold rounded-lg text-white transition-colors"
+            style={{ background: 'linear-gradient(135deg, #30b299, #05a779)' }}>
+            Exportar
+          </button>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { label: 'Revenue Total',  value: formatUSD(globalMetrics.revenue),  color: '#30b299' },
+          { label: 'Costo Equipos',  value: formatUSD(globalMetrics.teamCost), color: '#6B7280' },
+          { label: 'GOP',            value: formatUSD(globalMetrics.gop),      color: globalMetrics.gop >= 0 ? '#009444' : '#E53935' },
+          { label: 'GOP%',           value: formatPct(globalMetrics.gopPct),   color: globalMetrics.gopPct >= 30 ? '#009444' : '#F59E0B' },
+          { label: 'Margen Neto',    value: formatUSD(globalMetrics.margin),   color: globalMetrics.margin >= 0 ? '#009444' : '#E53935' },
+        ].map(kpi => (
+          <div key={kpi.label} className="bg-white rounded-xl shadow-sm p-3 border border-gray-100">
+            <p className="text-xs text-textSecondary mb-1">{kpi.label}</p>
+            <p className="text-sm font-bold" style={{ color: kpi.color }}>{kpi.value}</p>
+          </div>
+        ))}
+
+        {/* Overhead editable */}
+        <div className={`bg-white rounded-xl shadow-sm p-3 border ${overheadManual !== null ? 'border-warning/40 bg-warning/5' : 'border-gray-100'}`}>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-textSecondary">Overhead USD</p>
+            {overheadManual !== null && (
+              <button onClick={clearOverheadManual}
+                className="text-[9px] text-accent hover:underline">auto</button>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-textSecondary">USD</span>
+            <input
+              type="text"
+              value={overheadUSD.toLocaleString('es-AR')}
+              onChange={e => {
+                const num = parseInt(e.target.value.replace(/\D/g, '')) || 0
+                setOverheadManual(num)
+              }}
+              className="w-full text-sm font-bold bg-transparent focus:outline-none focus:ring-0 text-right"
+              style={{ color: '#F59E0B' }}
+            />
+          </div>
+          <p className="text-[9px] text-textSecondary mt-1">
+            {overheadManual !== null
+              ? `Manual · Sheet: ${formatUSD(overheadFromSheet)}`
+              : overheadFromSheet > 0 ? 'Auto desde sheet' : 'Sin datos de overhead'
+            }
+          </p>
+        </div>
+      </div>
+
+      {/* Orphan alert */}
+      {(_orphanedMembers.length > 0 || _orphanedClients.length > 0) && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-amber-500 text-base">&#9888;</span>
+            <div>
+              <p className="font-semibold text-amber-700">Cambios detectados en Google Sheets</p>
+              <p className="text-amber-600">
+                {_orphanedMembers.length > 0 && `${_orphanedMembers.length} miembro${_orphanedMembers.length > 1 ? 's' : ''} ya no aparece${_orphanedMembers.length > 1 ? 'n' : ''} en el equipo`}
+                {_orphanedMembers.length > 0 && _orphanedClients.length > 0 && ' · '}
+                {_orphanedClients.length > 0 && `${_orphanedClients.length} cliente${_orphanedClients.length > 1 ? 's' : ''} ya no aparece${_orphanedClients.length > 1 ? 'n' : ''} en ventas`}
+                {' — '}marcados como BAJA en los PODs afectados.
+              </p>
+            </div>
+          </div>
+          <button onClick={purgeOrphans}
+            className="text-xs font-semibold text-amber-700 border border-amber-300 hover:bg-amber-100 rounded-lg px-3 py-1.5 flex-shrink-0 transition-colors">
+            Purgar bajas
+          </button>
+        </div>
+      )}
+
+      {/* TC + source badges */}
+      <div className="flex items-center gap-2 text-xs text-textSecondary flex-wrap">
+        <span className="w-2 h-2 rounded-full bg-accent animate-pulse inline-block" />
+        <span>
+          TC: <strong className="text-textPrimary">${rate.toLocaleString('es-AR')}</strong> (blue)
+          {rateData && <span className="ml-1 text-gray-400">· {rateData.compra}/{rateData.venta}</span>}
+        </span>
+        <button onClick={refreshRate} className="text-accent hover:underline">↻</button>
+        {teamSource === 'sheets' && (
+          <span className="px-2 py-0.5 bg-accent/10 text-accent rounded-full font-medium">Equipo · live</span>
+        )}
+        {ventasSource === 'sheets' && selectedMonth && (
+          <span className="px-2 py-0.5 bg-success/10 text-success rounded-full font-medium">Ventas · {periodLabel}</span>
+        )}
+        <span className="px-2 py-0.5 bg-gray-100 text-textSecondary rounded-full font-medium">{pods.length} PODs</span>
+      </div>
+
+      {/* Layout principal */}
+      <div className="flex gap-4" style={{ alignItems: 'flex-start' }}>
+
+        {/* ─── Pool lateral ─── */}
+        <div className="w-64 flex-shrink-0">
+          <div className="bg-white rounded-2xl shadow-md p-4 sticky top-4 border border-gray-200">
+            <div className="flex rounded-lg p-1 mb-3" style={{ background: 'rgba(89,215,162,0.08)' }}>
+              {[
+                { key: 'equipo', label: 'Equipo', count: teamPool.length },
+                { key: 'clientes', label: 'Clientes', count: clientPool.length },
+              ].map(tab => (
+                <button key={tab.key}
+                  onClick={() => { setPoolTab(tab.key); setSearch(''); setSelected(null) }}
+                  className={`flex-1 text-xs font-semibold py-2 rounded-md transition-all ${
+                    poolTab === tab.key
+                      ? 'bg-white text-textPrimary shadow-sm'
+                      : 'text-textSecondary hover:text-textPrimary'
+                  }`}>
+                  {tab.label} <span className="text-[10px] opacity-60">({tab.count})</span>
+                </button>
+              ))}
+            </div>
+
+            <input
+              type="text"
+              placeholder={poolTab === 'equipo' ? 'Buscar persona...' : 'Buscar cliente...'}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full text-xs border-2 border-gray-200 rounded-lg px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
+            />
+
+            <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1">
+              {poolTab === 'equipo' && filteredTeam.map(member => {
+                const usage = memberUsage[member.nombre] || []
+                const totalAlloc = usage.reduce((s, u) => s + u.allocation, 0)
+                const isFullyAllocated = totalAlloc >= 100
+                const isSelected = selected?.type === 'team' && selected?.nombre === member.nombre
+                return (
+                  <div key={member.nombre}
+                    onClick={() => !isFullyAllocated && handleSelect({ type: 'team', nombre: member.nombre, costoUSD: member.costoUSD })}
+                    className={`p-2 rounded-lg border transition-all text-xs ${
+                      isFullyAllocated
+                        ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                        : isSelected ? 'border-accent bg-accent/10 shadow-sm cursor-pointer' : 'border-gray-100 hover:border-accent/40 hover:bg-gray-50 cursor-pointer'
+                    }`}>
+                    <div className="flex items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[10px] font-bold shadow-sm"
+                          style={{ background: member._simulated ? '#8B5CF6' : isSelected ? '#30b299' : isFullyAllocated ? '#9CA3AF' : '#374151' }}>
+                          {member.nombre.split(' ').map(n => n[0]).join('').slice(0,2)}
+                        </div>
+                        <div className="min-w-0">
+                          <span className={`font-semibold truncate block text-[12px] ${isFullyAllocated ? 'text-gray-400' : 'text-gray-800'}`}>
+                            {member.nombre.split(' ').slice(0,2).join(' ')}
+                          </span>
+                          {member._simulated && (
+                            <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-purple-100 text-purple-600">SIM</span>
+                          )}
+                        </div>
+                      </div>
+                      <span className={`font-bold text-xs flex-shrink-0 ${isFullyAllocated ? 'text-gray-400' : 'text-gray-600'}`}>{formatUSD(member.costoUSD)}</span>
+                    </div>
+                    {usage.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {usage.map(u => (
+                          <span key={u.podId} className="px-1 py-0.5 rounded text-[10px] font-semibold"
+                            style={{ background: (POD_COLORS[u.podId] || '#999') + '25', color: POD_COLORS[u.podId] || '#999' }}>
+                            {u.podId} {u.allocation}%
+                          </span>
+                        ))}
+                        {totalAlloc >= 100 && (
+                          <span className={`px-1 py-0.5 rounded text-[10px] font-bold ${
+                            totalAlloc > 100 ? 'bg-danger/10 text-danger' : 'bg-accent/10 text-accent'
+                          }`}>{totalAlloc > 100 ? `⚠ ${totalAlloc}%` : '100%'}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {poolTab === 'clientes' && filteredClients.map(client => {
+                const assignedTo = clientUsage[client.nombre]
+                const isSelected = selected?.type === 'client' && selected?.nombre === client.nombre
+                return (
+                  <div key={client.nombre}
+                    onClick={() => handleSelect({ type: 'client', nombre: client.nombre, tipo: client.tipo, revenue: client.revenue })}
+                    className={`p-2.5 rounded-lg border-2 cursor-pointer transition-all text-xs ${
+                      isSelected ? 'border-accent bg-accent/10 shadow-md'
+                      : assignedTo ? 'border-emerald-300 bg-emerald-50'
+                      : 'border-gray-200 hover:border-accent/50 hover:bg-gray-50 hover:shadow-sm'
+                    }`}>
+                    <div className="flex items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 ${
+                          client.tipo === 'A' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-600'
+                        }`}>{client.tipo}</span>
+                        <span className="font-semibold text-gray-800 truncate text-[12px]">{client.nombre}</span>
+                      </div>
+                      <span className="text-emerald-700 font-bold flex-shrink-0 text-xs">{formatUSD(client.revenue)}</span>
+                    </div>
+                    {assignedTo && (
+                      <div className="mt-1.5">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold"
+                          style={{ background: (POD_COLORS[assignedTo] || '#999') + '30', color: POD_COLORS[assignedTo] || '#666' }}>
+                          → {assignedTo}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+
+              {poolTab === 'clientes' && filteredClients.length === 0 && !loadingVentas && (
+                <p className="text-[11px] text-textSecondary text-center py-4 italic">
+                  {ventasData ? 'Sin resultados' : 'Conectar Google Sheets para ver clientes reales'}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-gray-100 text-[11px] text-textSecondary text-center">
+              {poolTab === 'equipo'
+                ? (loadingTeam ? '⟳ Cargando...' : `${teamPool.length} personas${newPeople.length > 0 ? ` (${newPeople.length} simuladas)` : ''}`)
+                : (loadingVentas ? '⟳ Cargando...' : `${clientPool.length} clientes activos`)
+              }
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Grid de PODs ─── */}
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {podMetrics.map((pod, podIndex) => {
+            const color = getColor(pod.id, podIndex)
+            const isDeleting = confirmDelete === pod.id
+
+            return (
+              <div key={pod.id}
+                onClick={() => isTargeting && handleAssignToPod(pod.id)}
+                className={`bg-white rounded-2xl shadow-sm border-2 transition-all ${
+                  isTargeting ? 'border-accent cursor-pointer hover:shadow-md hover:scale-[1.01]' : 'border-transparent'
+                }`}>
+
+                {/* POD Header */}
+                <div className="flex items-center justify-between px-4 py-3 rounded-t-2xl"
+                  style={{ background: color + '18', borderBottom: `2px solid ${color}30` }}>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: color }} />
+                    <span className="text-sm font-bold text-textPrimary flex-shrink-0">{pod.id}</span>
+                    {editingName === pod.id ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editingValue}
+                        onChange={e => setEditingValue(e.target.value)}
+                        onBlur={commitRename}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') commitRename()
+                          if (e.key === 'Escape') { setEditingName(null); setEditingValue('') }
+                        }}
+                        onClick={e => e.stopPropagation()}
+                        className="text-xs bg-white border border-accent rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-accent/30 min-w-0 flex-1"
+                      />
+                    ) : (
+                      <span
+                        onClick={e => { e.stopPropagation(); startRename(pod.id, pod.nombre) }}
+                        className={`text-xs truncate cursor-text hover:text-textPrimary hover:underline decoration-dashed underline-offset-2 min-w-0 ${pod.nombre ? 'text-textSecondary' : 'text-gray-300 italic'}`}
+                        title="Click para renombrar">
+                        {pod.nombre || 'Sin nombre — asigna un cliente'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className="text-lg">{semaforo(pod.marginPct)}</span>
+                    {isDeleting ? (
+                      <div className="flex items-center gap-1 ml-1" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => handleDeletePod(pod.id)}
+                          className="text-[10px] font-bold text-white bg-danger rounded px-1.5 py-0.5 hover:bg-danger/80">Sí</button>
+                        <button onClick={() => setConfirmDelete(null)}
+                          className="text-[10px] font-bold text-textSecondary bg-gray-100 rounded px-1.5 py-0.5 hover:bg-gray-200">No</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={e => { e.stopPropagation(); setConfirmDelete(pod.id) }}
+                        className="text-gray-300 hover:text-danger transition-colors ml-1 text-sm"
+                        title="Eliminar POD">✕</button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 space-y-3">
+                  {/* Revenue */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-textSecondary w-20 flex-shrink-0">Revenue</span>
+                    <div className="flex-1 relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-textSecondary">USD</span>
+                      <input type="text"
+                        value={pod.revenue.toLocaleString('es-AR')}
+                        onChange={e => handleRevenueChange(pod.id, e.target.value)}
+                        onClick={e => e.stopPropagation()}
+                        className="w-full text-right text-xs font-semibold border border-gray-200 rounded-lg px-2 py-1.5 pl-8 focus:outline-none focus:ring-2 focus:ring-accent/30" />
+                    </div>
+                    {pod.hasOverride && (
+                      <button onClick={e => { e.stopPropagation(); clearRevenueOverride(pod.id) }}
+                        className="text-[9px] text-accent hover:underline flex-shrink-0">auto</button>
+                    )}
+                  </div>
+
+                  {/* Metricas */}
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="bg-gray-50 rounded-lg p-2">
+                      <p className="text-[10px] text-textSecondary">Costo</p>
+                      <p className="text-xs font-bold text-textPrimary">{formatUSD(pod.teamCost)}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-2">
+                      <p className="text-[10px] text-textSecondary">GOP%</p>
+                      <p className={`text-xs font-bold ${pod.gopPct >= 0 ? 'text-success' : 'text-danger'}`}>{formatPct(pod.gopPct)}</p>
+                    </div>
+                    <div className={`rounded-lg p-2 border ${margenBg(pod.marginPct)}`}>
+                      <p className="text-[10px] opacity-70">Margen%</p>
+                      <p className="text-xs font-bold">{formatPct(pod.marginPct)}</p>
+                    </div>
+                  </div>
+
+                  <div className="w-full bg-gray-100 rounded-full h-1.5">
+                    <div className="h-1.5 rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.min(Math.max(pod.marginPct + 40, 0), 100)}%`,
+                        background: pod.marginPct > 20 ? '#009444' : pod.marginPct >= 0 ? '#F59E0B' : '#E53935',
+                      }} />
+                  </div>
+
+                  {/* Clientes asignados */}
+                  {pod.clients.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold text-textSecondary uppercase tracking-wide">Clientes ({pod.clients.length})</p>
+                      {pod.clients.map(client => (
+                        <div key={client.nombre}
+                          className={`flex items-center gap-2 text-[11px] ${client._orphaned ? 'opacity-50 bg-danger/5 rounded px-1 -mx-1' : ''}`}
+                          onClick={e => e.stopPropagation()}>
+                          {client._orphaned && (
+                            <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-danger/15 text-danger flex-shrink-0" title="Ya no aparece en Ventas Dolarizadas">BAJA</span>
+                          )}
+                          <span className={`px-1 py-0.5 rounded text-[9px] font-bold flex-shrink-0 ${
+                            client.tipo === 'A' ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-textSecondary'
+                          }`}>{client.tipo}</span>
+                          <span className={`truncate flex-1 min-w-0 ${client._orphaned ? 'line-through text-textSecondary' : 'text-textPrimary'}`}>{client.nombre}</span>
+                          <span className="text-primary font-semibold flex-shrink-0">{formatUSD(client.revenue)}</span>
+                          <button onClick={() => removeClient(pod.id, client.nombre)}
+                            className="text-gray-300 hover:text-danger transition-colors flex-shrink-0">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Equipo asignado */}
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-semibold text-textSecondary uppercase tracking-wide">Equipo ({pod.members.length})</p>
+                    {pod.members.length === 0 && pod.clients.length === 0 && (
+                      <p className="text-[11px] text-textSecondary italic text-center py-2">
+                        {isTargeting ? '→ Click para asignar aquí' : 'Sin asignaciones'}
+                      </p>
+                    )}
+                    {pod.members.map(member => {
+                      // Calcular max disponible para el slider
+                      const usedElsewhere = Object.entries(assignments)
+                        .filter(([pid]) => pid !== pod.id)
+                        .reduce((sum, [, members]) => {
+                          const m = members.find(m => m.nombre === member.nombre)
+                          return sum + (m ? m.allocation : 0)
+                        }, 0)
+                      const maxSlider = Math.max(10, 100 - usedElsewhere)
+                      const totalAlloc = usedElsewhere + member.allocation
+
+                      return (
+                      <div key={member.nombre}
+                        className={`flex items-center gap-2 ${member._orphaned ? 'opacity-50 bg-danger/5 rounded px-1 -mx-1' : ''}`}
+                        onClick={e => e.stopPropagation()}>
+                        {member._orphaned ? (
+                          <span className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0 bg-danger"
+                            title="Ya no aparece en Team Costo Normalizado">!</span>
+                        ) : (
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
+                            style={{ background: color }}>
+                            {member.nombre.split(' ').map(n => n[0]).join('').slice(0,2)}
+                          </div>
+                        )}
+                        <span className={`text-[11px] truncate flex-1 min-w-0 ${member._orphaned ? 'line-through text-textSecondary' : 'text-textPrimary'}`}>
+                          {member.nombre.split(' ').slice(0,2).join(' ')}
+                        </span>
+                        {!member._orphaned && (
+                          <>
+                            <input type="range" min={10} max={maxSlider} step={5}
+                              value={member.allocation}
+                              onChange={e => setAllocation(pod.id, member.nombre, e.target.value)}
+                              className="w-14 accent-accent"
+                              title={`Disponible: ${maxSlider}% (${usedElsewhere}% asignado en otros PODs)`} />
+                            <span className={`text-[10px] font-bold w-8 text-right flex-shrink-0 ${
+                              totalAlloc >= 100 ? 'text-danger' : ''
+                            }`} style={totalAlloc < 100 ? { color } : {}}>
+                              {member.allocation}%
+                            </span>
+                          </>
+                        )}
+                        {member._orphaned && (
+                          <span className="text-[8px] font-bold text-danger flex-shrink-0">BAJA</span>
+                        )}
+                        <button onClick={() => removeMember(pod.id, member.nombre)}
+                          className="text-gray-300 hover:text-danger transition-colors flex-shrink-0 text-xs">✕</button>
+                      </div>
+                      )
+                    })}
+                  </div>
+
+                  {(pod.members.length > 0 || pod.clients.length > 0) && (
+                    <div className="text-[10px] text-textSecondary border-t border-gray-100 pt-2 space-y-0.5">
+                      {pod.clients.length > 0 && (
+                        <div className="flex justify-between">
+                          <span>Revenue clientes</span>
+                          <span className="font-semibold text-primary">{formatUSD(pod.clientRevenue)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between"><span>Costo equipo</span><span className="font-semibold">{formatUSD(pod.teamCost)}</span></div>
+                      <div className="flex justify-between"><span>Overhead (proporcional)</span><span className="font-semibold">{formatUSD(pod.overhead)}</span></div>
+                      <div className="flex justify-between font-bold text-textPrimary border-t border-gray-100 pt-0.5 mt-0.5">
+                        <span>Margen neto</span>
+                        <span className={pod.margin >= 0 ? 'text-success' : 'text-danger'}>{formatUSD(pod.margin)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+
+          <button onClick={handleAddPod}
+            className="rounded-2xl border-2 border-dashed border-gray-300 hover:border-accent flex flex-col items-center justify-center gap-2 py-12 text-textSecondary hover:text-accent transition-colors cursor-pointer group">
+            <span className="text-3xl group-hover:scale-110 transition-transform">+</span>
+            <span className="text-xs font-semibold">Agregar POD</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Tabla resumen */}
+      <div className="bg-white rounded-2xl shadow-sm p-5 overflow-x-auto">
+        <h2 className="text-sm font-bold text-textPrimary mb-4">Resumen comparativo por POD</h2>
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-gray-100">
+              {['POD','Nombre','Clientes','Revenue','Costo Equipo','GOP','GOP%','Overhead','Margen','Margen%','Estado'].map(h => (
+                <th key={h} className="pb-2 text-left font-semibold text-textSecondary pr-4 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {podMetrics.map((pod, i) => (
+              <tr key={pod.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                <td className="py-2 pr-4">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: getColor(pod.id, i) }} />
+                    <span className="font-semibold text-textPrimary">{pod.id}</span>
+                  </div>
+                </td>
+                <td className="py-2 pr-4 text-textSecondary max-w-[120px] truncate">{pod.nombre}</td>
+                <td className="py-2 pr-4 text-textSecondary">{pod.clients.length || '—'}</td>
+                <td className="py-2 pr-4 font-semibold">{formatUSD(pod.revenue)}</td>
+                <td className="py-2 pr-4">{formatUSD(pod.teamCost)}</td>
+                <td className={`py-2 pr-4 font-semibold ${pod.gop >= 0 ? 'text-success' : 'text-danger'}`}>{formatUSD(pod.gop)}</td>
+                <td className="py-2 pr-4"><span className={`px-1.5 py-0.5 rounded-full font-bold text-[10px] ${margenBg(pod.gopPct)}`}>{formatPct(pod.gopPct)}</span></td>
+                <td className="py-2 pr-4 text-warning">{formatUSD(pod.overhead)}</td>
+                <td className={`py-2 pr-4 font-bold ${pod.margin >= 0 ? 'text-success' : 'text-danger'}`}>{formatUSD(pod.margin)}</td>
+                <td className="py-2 pr-4"><span className={`px-1.5 py-0.5 rounded-full font-bold text-[10px] border ${margenBg(pod.marginPct)}`}>{formatPct(pod.marginPct)}</span></td>
+                <td className="py-2 text-base">{semaforo(pod.marginPct)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-gray-200 font-bold">
+              <td className="pt-3 pr-4 text-textPrimary">TOTAL</td>
+              <td className="pt-3 pr-4 text-textSecondary">{pods.length} PODs</td>
+              <td className="pt-3 pr-4 text-textSecondary">{Object.values(clientAssignments).flat().length}</td>
+              <td className="pt-3 pr-4">{formatUSD(globalMetrics.revenue)}</td>
+              <td className="pt-3 pr-4">{formatUSD(globalMetrics.teamCost)}</td>
+              <td className={`pt-3 pr-4 ${globalMetrics.gop >= 0 ? 'text-success' : 'text-danger'}`}>{formatUSD(globalMetrics.gop)}</td>
+              <td className="pt-3 pr-4"><span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${margenBg(globalMetrics.gopPct)}`}>{formatPct(globalMetrics.gopPct)}</span></td>
+              <td className="pt-3 pr-4 text-warning">{formatUSD(globalMetrics.overhead)}</td>
+              <td className={`pt-3 pr-4 ${globalMetrics.margin >= 0 ? 'text-success' : 'text-danger'}`}>{formatUSD(globalMetrics.margin)}</td>
+              <td className="pt-3 pr-4"><span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold border ${margenBg(globalMetrics.marginPct)}`}>{formatPct(globalMetrics.marginPct)}</span></td>
+              <td className="pt-3 text-base">{semaforo(globalMetrics.marginPct)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* Org Chart Importer Modal */}
+      <OrgChartImporter
+        open={orgImporterOpen}
+        onClose={() => setOrgImporterOpen(false)}
+        teamPool={teamPool}
+      />
+    </div>
+  )
+}

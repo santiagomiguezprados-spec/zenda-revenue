@@ -1,0 +1,112 @@
+/* ── Zenda Brand Fonts ─────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@200;300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS Variables Zenda Brand ─────────────────────────────────────────── */
+:root {
+  --zenda-green:   #59D7A2;
+  --zenda-pink:    #E71CA2;
+  --zenda-cyan:    #95D6EA;
+  --zenda-dark:    #0A0A0B;
+  --zenda-muted:   rgba(10,10,11,0.64);
+  --zenda-shadow:  rgba(0,0,0,0.10);
+  --logo-teal:     #77BFBE;
+  --logo-forest:   #53924D;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Background con gradiente verde sutil (Brand Rule) ─────────────────── */
+body {
+  margin: 0;
+  font-family: 'Poppins', system-ui, sans-serif;
+  background: linear-gradient(
+    180deg,
+    rgba(89, 215, 162, 0) 0%,
+    rgba(89, 215, 162, 0.05) 100%
+  );
+  background-color: #ffffff;
+  background-attachment: fixed;
+  color: #0A0A0B;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ── Typography ─────────────────────────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Poppins', system-ui, sans-serif;
+  letter-spacing: -0.02em;
+  color: #0A0A0B;
+}
+
+/* ── Buttons base (outlined by default, fill on hover — Brand Rule) ─────── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 11rem;
+  height: 2.8rem;
+  border-radius: 0.5rem;
+  border: 1.5px solid var(--zenda-green);
+  color: var(--zenda-green);
+  background: transparent;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.4s ease;
+  cursor: pointer;
+}
+.btn-primary:hover {
+  background: var(--zenda-green);
+  color: #ffffff;
+}
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  border: 1.5px solid var(--zenda-pink);
+  color: var(--zenda-pink);
+  background: transparent;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.4s ease;
+  cursor: pointer;
+  padding: 0.5rem 1.25rem;
+}
+.btn-secondary:hover {
+  background: var(--zenda-pink);
+  color: #ffffff;
+}
+
+/* ── Z Mark gradient helper ─────────────────────────────────────────────── */
+.z-gradient {
+  background: linear-gradient(135deg, #77BFBE 0%, #53924D 100%);
+}
+
+/* ── Card base ──────────────────────────────────────────────────────────── */
+.zenda-card {
+  background: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.10);
+  padding: 1rem;
+}
+
+/* ── Recharts ───────────────────────────────────────────────────────────── */
+.recharts-tooltip-wrapper {
+  z-index: 50;
+}

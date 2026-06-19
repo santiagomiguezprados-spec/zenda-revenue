@@ -1,0 +1,20 @@
+[
+  { "periodo": "Enero", "pod": "A1 Grupo Consenso", "revenue": 6200, "costoEquipo": 3800, "gop": 2400, "gopPct": 38.7, "overhead": 2100, "margen": 300, "margenPct": 4.8 },
+  { "periodo": "Enero", "pod": "A2 NewFlag", "revenue": 4800, "costoEquipo": 2900, "gop": 1900, "gopPct": 39.6, "overhead": 1800, "margen": 100, "margenPct": 2.1 },
+  { "periodo": "Enero", "pod": "A3", "revenue": 3500, "costoEquipo": 2400, "gop": 1100, "gopPct": 31.4, "overhead": 1400, "margen": -300, "margenPct": -8.6 },
+  { "periodo": "Enero", "pod": "A4 Keko", "revenue": 5200, "costoEquipo": 3100, "gop": 2100, "gopPct": 40.4, "overhead": 1900, "margen": 200, "margenPct": 3.8 },
+  { "periodo": "Enero", "pod": "A5 Wyndham Argentina", "revenue": 4100, "costoEquipo": 3200, "gop": 900, "gopPct": 22.0, "overhead": 1600, "margen": -700, "margenPct": -17.1 },
+  { "periodo": "Enero", "pod": "A6 Tai Loy", "revenue": 5800, "costoEquipo": 3500, "gop": 2300, "gopPct": 39.7, "overhead": 2000, "margen": 300, "margenPct": 5.2 },
+  { "periodo": "Enero", "pod": "A7 Sancor Seguros", "revenue": 4200, "costoEquipo": 3000, "gop": 1200, "gopPct": 28.6, "overhead": 1700, "margen": -500, "margenPct": -11.9 },
+  { "periodo": "Enero", "pod": "A8 Portfolio Personal", "revenue": 3596, "costoEquipo": 2800, "gop": 796, "gopPct": 22.1, "overhead": 1500, "margen": -704, "margenPct": -19.6 },
+  { "periodo": "Enero", "pod": "A9 UnEnsayoParaMi", "revenue": 1800, "costoEquipo": 1600, "gop": 200, "gopPct": 11.1, "overhead": 900, "margen": -700, "margenPct": -38.9 },
+  { "periodo": "Proyeccion", "pod": "A1 Grupo Consenso", "revenue": 7000, "costoEquipo": 3900, "gop": 3100, "gopPct": 44.3, "overhead": 2100, "margen": 1000, "margenPct": 14.3 },
+  { "periodo": "Proyeccion", "pod": "A2 NewFlag", "revenue": 5500, "costoEquipo": 3000, "gop": 2500, "gopPct": 45.5, "overhead": 1800, "margen": 700, "margenPct": 12.7 },
+  { "periodo": "Proyeccion", "pod": "A3", "revenue": 4200, "costoEquipo": 2400, "gop": 1800, "gopPct": 42.9, "overhead": 1400, "margen": 400, "margenPct": 9.5 },
+  { "periodo": "Proyeccion", "pod": "A4 Keko", "revenue": 5800, "costoEquipo": 3200, "gop": 2600, "gopPct": 44.8, "overhead": 1900, "margen": 700, "margenPct": 12.1 },
+  { "periodo": "Proyeccion", "pod": "A5 Wyndham Argentina", "revenue": 5000, "costoEquipo": 3200, "gop": 1800, "gopPct": 36.0, "overhead": 1600, "margen": 200, "margenPct": 4.0 },
+  { "periodo": "Proyeccion", "pod": "A6 Tai Loy", "revenue": 6200, "costoEquipo": 3600, "gop": 2600, "gopPct": 41.9, "overhead": 2000, "margen": 600, "margenPct": 9.7 },
+  { "periodo": "Proyeccion", "pod": "A7 Sancor Seguros", "revenue": 5000, "costoEquipo": 3000, "gop": 2000, "gopPct": 40.0, "overhead": 1700, "margen": 300, "margenPct": 6.0 },
+  { "periodo": "Proyeccion", "pod": "A8 Portfolio Personal", "revenue": 4500, "costoEquipo": 2900, "gop": 1600, "gopPct": 35.6, "overhead": 1500, "margen": 100, "margenPct": 2.2 },
+  { "periodo": "Proyeccion", "pod": "A9 UnEnsayoParaMi", "revenue": 2500, "costoEquipo": 1600, "gop": 900, "gopPct": 36.0, "overhead": 900, "margen": 0, "margenPct": 0.0 }
+]

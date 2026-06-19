@@ -1,0 +1,211 @@
+[
+  {
+    "nombre": "Grupo Consenso",
+    "tipo": "A",
+    "categoria": "General",
+    "pais": "Argentina",
+    "responsable": "Lucas Martínez",
+    "exterior": false,
+    "estado": "Activo",
+    "inicioMes": "Marzo 2024",
+    "ventaMensual": { "Ene": 3200, "Feb": 3100, "Mar": 3400, "Abr": 3300, "May": 3500, "Jun": 3600, "Jul": 3700, "Ago": 3800, "Sep": 3600, "Oct": 3700, "Nov": 3800, "Dic": 4000 }
+  },
+  {
+    "nombre": "Grupo Consenso 2",
+    "tipo": "A",
+    "categoria": "General",
+    "pais": "Argentina",
+    "responsable": "Lucas Martínez",
+    "exterior": false,
+    "estado": "Activo",
+    "inicioMes": "Junio 2024",
+    "ventaMensual": { "Ene": 1800, "Feb": 1900, "Mar": 2000, "Abr": 1900, "May": 2100, "Jun": 2200, "Jul": 2300, "Ago": 2100, "Sep": 2200, "Oct": 2300, "Nov": 2400, "Dic": 2500 }
+  },
+  {
+    "nombre": "NewFlag",
+    "tipo": "A",
+    "categoria": "Ecommerce",
+    "pais": "España",
+    "responsable": "María García",
+    "exterior": true,
+    "estado": "Activo",
+    "inicioMes": "Enero 2024",
+    "ventaMensual": { "Ene": 2800, "Feb": 2700, "Mar": 2900, "Abr": 3000, "May": 3100, "Jun": 3200, "Jul": 3000, "Ago": 3100, "Sep": 3200, "Oct": 3300, "Nov": 3200, "Dic": 3400 }
+  },
+  {
+    "nombre": "NewFlag 2",
+    "tipo": "B",
+    "categoria": "Ecommerce",
+    "pais": "España",
+    "responsable": "María García",
+    "exterior": true,
+    "estado": "Activo",
+    "inicioMes": "Abril 2024",
+    "ventaMensual": { "Ene": 1500, "Feb": 1600, "Mar": 1700, "Abr": 1600, "May": 1800, "Jun": 1900, "Jul": 1800, "Ago": 1900, "Sep": 2000, "Oct": 2100, "Nov": 2000, "Dic": 2200 }
+  },
+  {
+    "nombre": "NewFlag 3",
+    "tipo": "C",
+    "categoria": "Leads",
+    "pais": "España",
+    "responsable": "María García",
+    "exterior": true,
+    "estado": "Inactivo",
+    "inicioMes": "Septiembre 2024",
+    "ventaMensual": { "Ene": 0, "Feb": 0, "Mar": 500, "Abr": 600, "May": 700, "Jun": 800, "Jul": 900, "Ago": 0, "Sep": 0, "Oct": 0, "Nov": 0, "Dic": 0 }
+  },
+  {
+    "nombre": "Keko",
+    "tipo": "A",
+    "categoria": "Apps",
+    "pais": "Argentina",
+    "responsable": "Diego Rodríguez",
+    "exterior": false,
+    "estado": "Activo",
+    "inicioMes": "Febrero 2024",
+    "ventaMensual": { "Ene": 3800, "Feb": 3700, "Mar": 3900, "Abr": 4000, "May": 4100, "Jun": 4200, "Jul": 4100, "Ago": 4300, "Sep": 4200, "Oct": 4400, "Nov": 4300, "Dic": 4500 }
+  },
+  {
+    "nombre": "Keko Dev",
+    "tipo": "B",
+    "categoria": "Apps",
+    "pais": "Argentina",
+    "responsable": "Diego Rodríguez",
+    "exterior": false,
+    "estado": "Activo",
+    "inicioMes": "Mayo 2024",
+    "ventaMensual": { "Ene": 1200, "Feb": 1300, "Mar": 1400, "Abr": 1300, "May": 1500, "Jun": 1600, "Jul": 1500, "Ago": 1600, "Sep": 1700, "Oct": 1800, "Nov": 1700, "Dic": 1900 }
+  },
+  {
+    "nombre": "Wyndham Argentina",
+    "tipo": "A",
+    "categoria": "General",
+    "pais": "Argentina",
+    "responsable": "Ana López",
+    "exterior": false,
+    "estado": "Activo",
+    "inicioMes": "Enero 2024",
+    "ventaMensual": { "Ene": 2900, "Feb": 2800, "Mar": 3000, "Abr": 3100, "May": 3200, "Jun": 3300, "Jul": 3200, "Ago": 3400, "Sep": 3300, "Oct": 3500, "Nov": 3400, "Dic": 3600 }
+  },
+  {
+    "nombre": "Wyndham Global",
+    "tipo": "B",
+    "categoria": "General",
+    "pais": "España",
+    "responsable": "Ana López",
+    "exterior": true,
+    "estado": "Inactivo",
+    "inicioMes": "Agosto 2024",
+    "ventaMensual": { "Ene": 0, "Feb": 800, "Mar": 900, "Abr": 1000, "May": 1100, "Jun": 1200, "Jul": 1100, "Ago": 0, "Sep": 0, "Oct": 0, "Nov": 0, "Dic": 0 }
+  },
+  {
+    "nombre": "Tai Loy",
+    "tipo": "A",
+    "categoria": "Ecommerce",
+    "pais": "Peru",
+    "responsable": "Carlos Pérez",
+    "exterior": true,
+    "estado": "Activo",
+    "inicioMes": "Marzo 2024",
+    "ventaMensual": { "Ene": 4200, "Feb": 4100, "Mar": 4300, "Abr": 4400, "May": 4500, "Jun": 4600, "Jul": 4500, "Ago": 4700, "Sep": 4600, "Oct": 4800, "Nov": 4700, "Dic": 4900 }
+  },
+  {
+    "nombre": "Tai Loy Digital",
+    "tipo": "B",
+    "categoria": "Ecommerce",
+    "pais": "Peru",
+    "responsable": "Carlos Pérez",
+    "exterior": true,
+    "estado": "Activo",
+    "inicioMes": "Julio 2024",
+    "ventaMensual": { "Ene": 1400, "Feb": 1500, "Mar": 1600, "Abr": 1500, "May": 1700, "Jun": 1800, "Jul": 1700, "Ago": 1900, "Sep": 1800, "Oct": 2000, "Nov": 1900, "Dic": 2100 }
+  },
+  {
+    "nombre": "Sancor Seguros",
+    "tipo": "A",
+    "categoria": "General",
+    "pais": "Argentina",
+    "responsable": "Roberto Silva",
+    "exterior": false,
+    "estado": "Activo",
+    "inicioMes": "Enero 2024",
+    "ventaMensual": { "Ene": 3000, "Feb": 2900, "Mar": 3100, "Abr": 3200, "May": 3300, "Jun": 3400, "Jul": 3300, "Ago": 3500, "Sep": 3400, "Oct": 3600, "Nov": 3500, "Dic": 3700 }
+  },
+  {
+    "nombre": "Sancor Digital",
+    "tipo": "B",
+    "categoria": "Apps",
+    "pais": "Argentina",
+    "responsable": "Roberto Silva",
+    "exterior": false,
+    "estado": "Activo",
+    "inicioMes": "Junio 2024",
+    "ventaMensual": { "Ene": 900, "Feb": 1000, "Mar": 1100, "Abr": 1000, "May": 1200, "Jun": 1300, "Jul": 1200, "Ago": 1400, "Sep": 1300, "Oct": 1500, "Nov": 1400, "Dic": 1600 }
+  },
+  {
+    "nombre": "Portfolio Personal",
+    "tipo": "A",
+    "categoria": "Apps",
+    "pais": "Argentina",
+    "responsable": "Valentina Torres",
+    "exterior": false,
+    "estado": "Activo",
+    "inicioMes": "Febrero 2024",
+    "ventaMensual": { "Ene": 2800, "Feb": 2700, "Mar": 2900, "Abr": 3000, "May": 3100, "Jun": 3200, "Jul": 3100, "Ago": 3300, "Sep": 3200, "Oct": 3400, "Nov": 3300, "Dic": 3500 }
+  },
+  {
+    "nombre": "Portfolio Dev",
+    "tipo": "C",
+    "categoria": "Apps",
+    "pais": "Argentina",
+    "responsable": "Valentina Torres",
+    "exterior": false,
+    "estado": "Inactivo",
+    "inicioMes": "Octubre 2024",
+    "ventaMensual": { "Ene": 0, "Feb": 0, "Mar": 0, "Abr": 0, "May": 0, "Jun": 0, "Jul": 600, "Ago": 700, "Sep": 600, "Oct": 0, "Nov": 0, "Dic": 0 }
+  },
+  {
+    "nombre": "UnEnsayoParaMi",
+    "tipo": "B",
+    "categoria": "Consultoria",
+    "pais": "Argentina",
+    "responsable": "Pablo Fernández",
+    "exterior": false,
+    "estado": "Activo",
+    "inicioMes": "Septiembre 2024",
+    "ventaMensual": { "Ene": 1500, "Feb": 1400, "Mar": 1600, "Abr": 1700, "May": 1800, "Jun": 1900, "Jul": 1800, "Ago": 2000, "Sep": 1900, "Oct": 2100, "Nov": 2000, "Dic": 2200 }
+  },
+  {
+    "nombre": "StartupX",
+    "tipo": "C",
+    "categoria": "Consultoria",
+    "pais": "Argentina",
+    "responsable": "Pablo Fernández",
+    "exterior": false,
+    "estado": "Inactivo",
+    "inicioMes": "Noviembre 2024",
+    "ventaMensual": { "Ene": 0, "Feb": 0, "Mar": 0, "Abr": 0, "May": 0, "Jun": 0, "Jul": 0, "Ago": 0, "Sep": 400, "Oct": 500, "Nov": 0, "Dic": 0 }
+  },
+  {
+    "nombre": "Ecommerce Pro",
+    "tipo": "B",
+    "categoria": "Ecommerce",
+    "pais": "España",
+    "responsable": "María García",
+    "exterior": true,
+    "estado": "Activo",
+    "inicioMes": "Enero 2025",
+    "ventaMensual": { "Ene": 1100, "Feb": 1200, "Mar": 1300, "Abr": 1400, "May": 1500, "Jun": 1600, "Jul": 1500, "Ago": 1700, "Sep": 1600, "Oct": 1800, "Nov": 1700, "Dic": 1900 }
+  },
+  {
+    "nombre": "Digital Leads SA",
+    "tipo": "C",
+    "categoria": "Leads",
+    "pais": "Argentina",
+    "responsable": "Lucas Martínez",
+    "exterior": false,
+    "estado": "Activo",
+    "inicioMes": "Marzo 2025",
+    "ventaMensual": { "Ene": 800, "Feb": 900, "Mar": 1000, "Abr": 1100, "May": 1200, "Jun": 1300, "Jul": 1200, "Ago": 1400, "Sep": 1300, "Oct": 1500, "Nov": 1400, "Dic": 1600 }
+  }
+]

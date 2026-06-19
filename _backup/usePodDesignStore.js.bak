@@ -1,0 +1,397 @@
+/**
+ * usePodDesignStore.js
+ * Estado global del diseno de PODs — persistido en localStorage.
+ * Compartido entre PodDesigner, Dashboard, Pods y Rentabilidad.
+ *
+ * IDs: siempre correlativos (A1, A2, A3...). Al borrar un POD, todos
+ * se renumeran. Al agregar, se agrega al final con el siguiente numero.
+ *
+ * Nombres: vacios por default. Se auto-asigna el nombre del primer
+ * cliente asignado al POD. El usuario puede renombrar manualmente.
+ *
+ * Sync: cuando los datos de Google Sheets se actualizan (nuevo hire,
+ * suba de sueldo, deal cerrado), el Layout llama syncWithLiveData()
+ * para actualizar costos y revenues en las asignaciones existentes.
+ */
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import { loadPodConfig, savePodConfig } from '../services/podConfigService'
+
+/** Cantidad inicial de PODs vacios */
+const INITIAL_POD_COUNT = 9
+
+/** Genera N pods vacios correlativos */
+function makeEmptyPods(n) {
+  return Array.from({ length: n }, (_, i) => ({ id: `A${i + 1}`, nombre: '' }))
+}
+
+const INITIAL_PODS = makeEmptyPods(INITIAL_POD_COUNT)
+
+/**
+ * Renumera todos los pods correlativamente (A1, A2, A3...)
+ * y remapea las asignaciones, clientAssignments y revenueOverrides.
+ */
+function renumberState(state) {
+  const oldPods = state.pods
+  const newPods = oldPods.map((p, i) => ({ ...p, id: `A${i + 1}` }))
+
+  // Build ID mapping: oldId -> newId
+  const idMap = {}
+  oldPods.forEach((p, i) => { idMap[p.id] = `A${i + 1}` })
+
+  // Remap assignments
+  const newAssignments = {}
+  const newClientAssignments = {}
+  const newRevenueOverrides = {}
+
+  oldPods.forEach(p => {
+    const newId = idMap[p.id]
+    newAssignments[newId] = state.assignments[p.id] || []
+    newClientAssignments[newId] = state.clientAssignments[p.id] || []
+    if (state.revenueOverrides[p.id] !== undefined) {
+      newRevenueOverrides[newId] = state.revenueOverrides[p.id]
+    }
+  })
+
+  return {
+    pods: newPods,
+    assignments: newAssignments,
+    clientAssignments: newClientAssignments,
+    revenueOverrides: newRevenueOverrides,
+  }
+}
+
+const usePodDesignStore = create(
+  persist(
+    (set, get) => ({
+      // Lista de PODs (id + nombre)
+      pods: INITIAL_PODS,
+      // Asignaciones equipo: { A1: [{nombre, costoUSD, allocation, _orphaned?}] }
+      assignments: Object.fromEntries(INITIAL_PODS.map(p => [p.id, []])),
+      // Asignaciones clientes: { A1: [{nombre, tipo, revenue, _orphaned?}] }
+      clientAssignments: Object.fromEntries(INITIAL_PODS.map(p => [p.id, []])),
+      // Revenue overrides manuales por POD
+      revenueOverrides: {},
+      // Overhead manual (null = auto desde sheet)
+      overheadManual: null,
+      // Ultimo sync timestamp
+      _lastSync: null,
+      // Miembros/clientes huerfanos (ya no estan en el sheet)
+      _orphanedMembers: [],
+      _orphanedClients: [],
+
+      // ── POD CRUD ────────────────────────────────────────────────────────────
+      addPod: (nombre) => set(s => {
+        const nextNum = s.pods.length + 1
+        const id = `A${nextNum}`
+        const updated = {
+          ...s,
+          pods: [...s.pods, { id, nombre: nombre || '' }],
+          assignments: { ...s.assignments, [id]: [] },
+          clientAssignments: { ...s.clientAssignments, [id]: [] },
+        }
+        return renumberState(updated)
+      }),
+
+      removePod: (podId) => set(s => {
+        const { [podId]: _a, ...restA } = s.assignments
+        const { [podId]: _c, ...restC } = s.clientAssignments
+        const { [podId]: _r, ...restR } = s.revenueOverrides
+        const updated = {
+          ...s,
+          pods: s.pods.filter(p => p.id !== podId),
+          assignments: restA,
+          clientAssignments: restC,
+          revenueOverrides: restR,
+        }
+        return renumberState(updated)
+      }),
+
+      renamePod: (podId, nombre) => set(s => ({
+        pods: s.pods.map(p => p.id === podId ? { ...p, nombre } : p),
+      })),
+
+      // ── Helper: allocation total de un miembro en todos los PODs ──────────
+      _getTotalAllocation: (nombre) => {
+        const { assignments } = get()
+        let total = 0
+        Object.values(assignments).forEach(members => {
+          members.forEach(m => { if (m.nombre === nombre) total += m.allocation })
+        })
+        return total
+      },
+
+      // ── Asignaciones equipo ─────────────────────────────────────────────────
+      assignMember: (podId, member) => set(s => {
+        const existing = s.assignments[podId] || []
+        if (existing.find(m => m.nombre === member.nombre)) return s
+
+        // Calcular allocation disponible (max 100% global)
+        let usedAllocation = 0
+        Object.values(s.assignments).forEach(members => {
+          members.forEach(m => { if (m.nombre === member.nombre) usedAllocation += m.allocation })
+        })
+        const available = Math.max(0, 100 - usedAllocation)
+        if (available === 0) return s // ya está al 100%
+
+        return {
+          assignments: {
+            ...s.assignments,
+            [podId]: [...existing, { nombre: member.nombre, costoUSD: member.costoUSD, allocation: available }],
+          },
+        }
+      }),
+
+      removeMember: (podId, nombre) => set(s => ({
+        assignments: {
+          ...s.assignments,
+          [podId]: (s.assignments[podId] || []).filter(m => m.nombre !== nombre),
+        },
+      })),
+
+      setAllocation: (podId, nombre, value) => set(s => {
+        const requested = Number(value)
+        // Calcular cuánto usa este miembro en OTROS pods (no el actual)
+        let usedElsewhere = 0
+        Object.entries(s.assignments).forEach(([pid, members]) => {
+          if (pid === podId) return
+          members.forEach(m => { if (m.nombre === nombre) usedElsewhere += m.allocation })
+        })
+        // Cap: no puede superar 100% global
+        const maxAllowed = Math.max(0, 100 - usedElsewhere)
+        const capped = Math.min(requested, maxAllowed)
+
+        return {
+          assignments: {
+            ...s.assignments,
+            [podId]: (s.assignments[podId] || []).map(m =>
+              m.nombre === nombre ? { ...m, allocation: capped } : m
+            ),
+          },
+        }
+      }),
+
+      // ── Asignaciones clientes ───────────────────────────────────────────────
+      assignClient: (podId, client) => set(s => {
+        // Remove from any other POD first
+        const next = { ...s.clientAssignments }
+        Object.keys(next).forEach(pid => {
+          next[pid] = next[pid].filter(c => c.nombre !== client.nombre)
+        })
+        next[podId] = [...(next[podId] || []), { nombre: client.nombre, tipo: client.tipo, revenue: client.revenue }]
+
+        // Auto-name: si el POD no tiene nombre, usar el nombre del primer cliente
+        const pod = s.pods.find(p => p.id === podId)
+        let updatedPods = s.pods
+        if (pod && !pod.nombre) {
+          updatedPods = s.pods.map(p =>
+            p.id === podId ? { ...p, nombre: client.nombre } : p
+          )
+        }
+
+        // Clear revenue override so it auto-calculates
+        const { [podId]: _, ...restR } = s.revenueOverrides
+        return { pods: updatedPods, clientAssignments: next, revenueOverrides: restR }
+      }),
+
+      removeClient: (podId, nombre) => set(s => {
+        const { [podId]: _, ...restR } = s.revenueOverrides
+        const updatedClients = (s.clientAssignments[podId] || []).filter(c => c.nombre !== nombre)
+
+        // Si se queda sin clientes y el nombre era el del cliente removido, limpiar nombre
+        const pod = s.pods.find(p => p.id === podId)
+        let updatedPods = s.pods
+        if (pod && pod.nombre === nombre && updatedClients.length === 0) {
+          updatedPods = s.pods.map(p =>
+            p.id === podId ? { ...p, nombre: '' } : p
+          )
+        } else if (pod && pod.nombre === nombre && updatedClients.length > 0) {
+          // Renombrar al siguiente cliente
+          updatedPods = s.pods.map(p =>
+            p.id === podId ? { ...p, nombre: updatedClients[0].nombre } : p
+          )
+        }
+
+        return {
+          pods: updatedPods,
+          clientAssignments: {
+            ...s.clientAssignments,
+            [podId]: updatedClients,
+          },
+          revenueOverrides: restR,
+        }
+      }),
+
+      // ── Revenue overrides ──────────────────────────────────────────────────
+      setRevenueOverride: (podId, value) => set(s => ({
+        revenueOverrides: { ...s.revenueOverrides, [podId]: value },
+      })),
+
+      clearRevenueOverride: (podId) => set(s => {
+        const { [podId]: _, ...rest } = s.revenueOverrides
+        return { revenueOverrides: rest }
+      }),
+
+      // ── Overhead manual ────────────────────────────────────────────────────
+      setOverheadManual: (value) => set({ overheadManual: value === null || value === '' ? null : Number(value) }),
+      clearOverheadManual: () => set({ overheadManual: null }),
+
+      // ── SYNC con datos live ────────────────────────────────────────────────
+      syncWithLiveData: (teamPool, clientPool) => set(s => {
+        // Build lookup maps
+        const teamMap = {}
+        teamPool.forEach(p => { teamMap[p.nombre] = p.costoUSD })
+
+        const clientMap = {}
+        clientPool.forEach(c => { clientMap[c.nombre] = { revenue: c.revenue, tipo: c.tipo } })
+
+        // Update member assignments: sync costoUSD, flag orphans
+        const orphanedMembers = []
+        const newAssignments = {}
+        Object.entries(s.assignments).forEach(([podId, members]) => {
+          newAssignments[podId] = members.map(m => {
+            const liveCost = teamMap[m.nombre]
+            if (liveCost === undefined) {
+              orphanedMembers.push({ podId, nombre: m.nombre })
+              return { ...m, _orphaned: true }
+            }
+            return { ...m, costoUSD: liveCost, _orphaned: false }
+          })
+        })
+
+        // Update client assignments: sync revenue, flag orphans
+        const orphanedClients = []
+        const newClientAssignments = {}
+        Object.entries(s.clientAssignments).forEach(([podId, clients]) => {
+          newClientAssignments[podId] = clients.map(c => {
+            const liveClient = clientMap[c.nombre]
+            if (liveClient === undefined) {
+              orphanedClients.push({ podId, nombre: c.nombre })
+              return { ...c, _orphaned: true }
+            }
+            return { ...c, revenue: liveClient.revenue, tipo: liveClient.tipo, _orphaned: false }
+          })
+        })
+
+        return {
+          assignments: newAssignments,
+          clientAssignments: newClientAssignments,
+          _orphanedMembers: orphanedMembers,
+          _orphanedClients: orphanedClients,
+          _lastSync: Date.now(),
+        }
+      }),
+
+      /** Remueve miembros/clientes huerfanos de todas las asignaciones */
+      purgeOrphans: () => set(s => {
+        const newA = {}
+        Object.entries(s.assignments).forEach(([podId, members]) => {
+          newA[podId] = members.filter(m => !m._orphaned)
+        })
+        const newC = {}
+        Object.entries(s.clientAssignments).forEach(([podId, clients]) => {
+          newC[podId] = clients.filter(c => !c._orphaned)
+        })
+        return {
+          assignments: newA,
+          clientAssignments: newC,
+          _orphanedMembers: [],
+          _orphanedClients: [],
+        }
+      }),
+
+      // ── Reset ──────────────────────────────────────────────────────────────
+      resetAll: () => {
+        set({
+          pods: INITIAL_PODS,
+          assignments: Object.fromEntries(INITIAL_PODS.map(p => [p.id, []])),
+          clientAssignments: Object.fromEntries(INITIAL_PODS.map(p => [p.id, []])),
+          revenueOverrides: {},
+          overheadManual: null,
+          _orphanedMembers: [],
+          _orphanedClients: [],
+          _lastSync: null,
+        })
+        // Guardar el reset en Supabase también
+        scheduleSave()
+      },
+
+      // ── Supabase sync ─────────────────────────────────────────────────────
+      _supabaseLoaded: false,
+      _saving: false,
+
+      /** Carga la config desde Supabase (llamar una vez al iniciar) */
+      loadFromSupabase: async () => {
+        const result = await loadPodConfig()
+        if (result?.config && Object.keys(result.config).length > 0) {
+          const c = result.config
+          set({
+            pods: c.pods || INITIAL_PODS,
+            assignments: c.assignments || {},
+            clientAssignments: c.clientAssignments || {},
+            revenueOverrides: c.revenueOverrides || {},
+            overheadManual: c.overheadManual ?? null,
+            _supabaseLoaded: true,
+          })
+          return true
+        }
+        set({ _supabaseLoaded: true })
+        return false
+      },
+
+      /** Guarda la config actual en Supabase */
+      saveToSupabase: async (userId) => {
+        const s = get()
+        if (s._saving) return
+        set({ _saving: true })
+        const config = {
+          pods: s.pods,
+          assignments: s.assignments,
+          clientAssignments: s.clientAssignments,
+          revenueOverrides: s.revenueOverrides,
+          overheadManual: s.overheadManual,
+        }
+        await savePodConfig(config, userId)
+        set({ _saving: false })
+      },
+    }),
+    {
+      name: 'zenda-pod-design',
+      // Solo persistir el estado del diseno, no timestamps internos
+      partialize: (state) => ({
+        pods: state.pods,
+        assignments: state.assignments,
+        clientAssignments: state.clientAssignments,
+        revenueOverrides: state.revenueOverrides,
+        overheadManual: state.overheadManual,
+      }),
+    }
+  )
+)
+
+// ── Auto-save debounced a Supabase ──────────────────────────────────────────
+let _saveTimer = null
+function scheduleSave() {
+  if (_saveTimer) clearTimeout(_saveTimer)
+  _saveTimer = setTimeout(() => {
+    usePodDesignStore.getState().saveToSupabase()
+  }, 1500) // 1.5s debounce
+}
+
+// Suscribirse a cambios del store para auto-guardar
+usePodDesignStore.subscribe(
+  (state, prevState) => {
+    // Solo guardar si hubo cambios en la data de diseño (no en flags internos)
+    if (
+      state.pods !== prevState.pods ||
+      state.assignments !== prevState.assignments ||
+      state.clientAssignments !== prevState.clientAssignments ||
+      state.revenueOverrides !== prevState.revenueOverrides ||
+      state.overheadManual !== prevState.overheadManual
+    ) {
+      scheduleSave()
+    }
+  }
+)
+
+export default usePodDesignStore

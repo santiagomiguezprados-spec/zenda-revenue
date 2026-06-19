@@ -1,0 +1,138 @@
+[
+  {
+    "id": "A1",
+    "nombre": "Grupo Consenso",
+    "clientes": [
+      { "nombre": "Grupo Consenso", "revenue": 3200 },
+      { "nombre": "Grupo Consenso 2", "revenue": 1800 },
+      { "nombre": "Digital Leads SA", "revenue": 800 },
+      { "nombre": "Ecommerce Pro", "revenue": 400 }
+    ],
+    "equipo": [
+      { "nombre": "Lucas Martínez", "porcentajeDedicacion": 80 },
+      { "nombre": "Sofía Méndez", "porcentajeDedicacion": 60 },
+      { "nombre": "Florencia Ruiz", "porcentajeDedicacion": 50 },
+      { "nombre": "Nicolás Castro", "porcentajeDedicacion": 40 }
+    ],
+    "metricas": { "totalClientes": 4, "totalEquipo": 4, "grossProfit": 2400, "overhead": 2100, "total": 6100, "revenue": 6200, "margenPct": 4.8 }
+  },
+  {
+    "id": "A2",
+    "nombre": "NewFlag",
+    "clientes": [
+      { "nombre": "NewFlag", "revenue": 2800 },
+      { "nombre": "NewFlag 2", "revenue": 1500 },
+      { "nombre": "Ecommerce Pro", "revenue": 500 }
+    ],
+    "equipo": [
+      { "nombre": "María García", "porcentajeDedicacion": 90 },
+      { "nombre": "Martín Gómez", "porcentajeDedicacion": 70 },
+      { "nombre": "Camila Ortiz", "porcentajeDedicacion": 50 }
+    ],
+    "metricas": { "totalClientes": 3, "totalEquipo": 3, "grossProfit": 1900, "overhead": 1800, "total": 4700, "revenue": 4800, "margenPct": 2.1 }
+  },
+  {
+    "id": "A3",
+    "nombre": "A3",
+    "clientes": [
+      { "nombre": "StartupX", "revenue": 1200 },
+      { "nombre": "Digital Leads SA", "revenue": 1400 },
+      { "nombre": "Ecommerce Pro", "revenue": 900 }
+    ],
+    "equipo": [
+      { "nombre": "Tomás Herrera", "porcentajeDedicacion": 80 },
+      { "nombre": "Luciana Vega", "porcentajeDedicacion": 70 },
+      { "nombre": "Agustina Ramos", "porcentajeDedicacion": 60 }
+    ],
+    "metricas": { "totalClientes": 3, "totalEquipo": 3, "grossProfit": 1100, "overhead": 1400, "total": 3800, "revenue": 3500, "margenPct": -8.6 }
+  },
+  {
+    "id": "A4",
+    "nombre": "Keko",
+    "clientes": [
+      { "nombre": "Keko", "revenue": 3800 },
+      { "nombre": "Keko Dev", "revenue": 1200 },
+      { "nombre": "Digital Leads SA", "revenue": 200 }
+    ],
+    "equipo": [
+      { "nombre": "Diego Rodríguez", "porcentajeDedicacion": 85 },
+      { "nombre": "Federico Blanco", "porcentajeDedicacion": 75 },
+      { "nombre": "Esteban Morales", "porcentajeDedicacion": 65 }
+    ],
+    "metricas": { "totalClientes": 3, "totalEquipo": 3, "grossProfit": 2100, "overhead": 1900, "total": 5000, "revenue": 5200, "margenPct": 3.8 }
+  },
+  {
+    "id": "A5",
+    "nombre": "Wyndham Argentina",
+    "clientes": [
+      { "nombre": "Wyndham Argentina", "revenue": 2900 },
+      { "nombre": "Wyndham Global", "revenue": 800 },
+      { "nombre": "StartupX", "revenue": 400 }
+    ],
+    "equipo": [
+      { "nombre": "Ana López", "porcentajeDedicacion": 90 },
+      { "nombre": "Camila Ortiz", "porcentajeDedicacion": 50 },
+      { "nombre": "Luciana Vega", "porcentajeDedicacion": 30 }
+    ],
+    "metricas": { "totalClientes": 3, "totalEquipo": 3, "grossProfit": 900, "overhead": 1600, "total": 3800, "revenue": 4100, "margenPct": -17.1 }
+  },
+  {
+    "id": "A6",
+    "nombre": "Tai Loy",
+    "clientes": [
+      { "nombre": "Tai Loy", "revenue": 4200 },
+      { "nombre": "Tai Loy Digital", "revenue": 1400 },
+      { "nombre": "Ecommerce Pro", "revenue": 200 }
+    ],
+    "equipo": [
+      { "nombre": "Carlos Pérez", "porcentajeDedicacion": 85 },
+      { "nombre": "Martín Gómez", "porcentajeDedicacion": 30 },
+      { "nombre": "Federico Blanco", "porcentajeDedicacion": 25 },
+      { "nombre": "Agustina Ramos", "porcentajeDedicacion": 40 }
+    ],
+    "metricas": { "totalClientes": 3, "totalEquipo": 4, "grossProfit": 2300, "overhead": 2000, "total": 5500, "revenue": 5800, "margenPct": 5.2 }
+  },
+  {
+    "id": "A7",
+    "nombre": "Sancor Seguros",
+    "clientes": [
+      { "nombre": "Sancor Seguros", "revenue": 3000 },
+      { "nombre": "Sancor Digital", "revenue": 900 },
+      { "nombre": "UnEnsayoParaMi", "revenue": 300 }
+    ],
+    "equipo": [
+      { "nombre": "Roberto Silva", "porcentajeDedicacion": 80 },
+      { "nombre": "Nicolás Castro", "porcentajeDedicacion": 60 },
+      { "nombre": "Esteban Morales", "porcentajeDedicacion": 35 }
+    ],
+    "metricas": { "totalClientes": 3, "totalEquipo": 3, "grossProfit": 1200, "overhead": 1700, "total": 3700, "revenue": 4200, "margenPct": -11.9 }
+  },
+  {
+    "id": "A8",
+    "nombre": "Portfolio Personal",
+    "clientes": [
+      { "nombre": "Portfolio Personal", "revenue": 2800 },
+      { "nombre": "Portfolio Dev", "revenue": 400 },
+      { "nombre": "Digital Leads SA", "revenue": 396 }
+    ],
+    "equipo": [
+      { "nombre": "Valentina Torres", "porcentajeDedicacion": 80 },
+      { "nombre": "Florencia Ruiz", "porcentajeDedicacion": 50 },
+      { "nombre": "Tomás Herrera", "porcentajeDedicacion": 20 }
+    ],
+    "metricas": { "totalClientes": 3, "totalEquipo": 3, "grossProfit": 796, "overhead": 1500, "total": 3500, "revenue": 3596, "margenPct": -19.6 }
+  },
+  {
+    "id": "A9",
+    "nombre": "UnEnsayoParaMi",
+    "clientes": [
+      { "nombre": "UnEnsayoParaMi", "revenue": 1500 },
+      { "nombre": "StartupX", "revenue": 300 }
+    ],
+    "equipo": [
+      { "nombre": "Pablo Fernández", "porcentajeDedicacion": 75 },
+      { "nombre": "Luciana Vega", "porcentajeDedicacion": 45 }
+    ],
+    "metricas": { "totalClientes": 2, "totalEquipo": 2, "grossProfit": 200, "overhead": 900, "total": 2500, "revenue": 1800, "margenPct": -38.9 }
+  }
+]
