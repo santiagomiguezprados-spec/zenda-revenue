@@ -37,7 +37,20 @@ export default function Clientes() {
   const mesKey = isSheets ? selectedMonth : 'Ene'
   const mesDisplay = isSheets ? periodLabel : 'Enero'
 
-  const { filtered, filters, setFilters, sortConfig, requestSort } = useClientFilters(clientsData || [])
+  // Enriquecer con campos numéricos flat para que el sort del hook funcione
+  const enrichedClients = useMemo(() =>
+    (clientsData || []).map(c => {
+      const feeActual = isSheets
+        ? selectedMonths.reduce((s, m) => s + (c.ventaMensual?.[m] || 0), 0)
+        : (c.ventaMensual?.['Ene'] || 0)
+      const vals = Object.values(c.ventaMensual || {}).filter(x => typeof x === 'number' && x > 0)
+      const _promedio = vals.length ? Math.round(vals.reduce((s, x) => s + x, 0) / vals.length) : 0
+      return { ...c, _feeActual: feeActual, _promedio }
+    }),
+    [clientsData, isSheets, selectedMonths]
+  )
+
+  const { filtered, filters, setFilters, sortConfig, requestSort } = useClientFilters(enrichedClients)
 
   const activos = useMemo(() =>
     (clientsData || []).filter(c => !c.estado || c.estado === 'Activo'),
@@ -58,32 +71,48 @@ export default function Clientes() {
   }).length
   const pctCero = activos.length ? (enCero / activos.length * 100).toFixed(0) : 0
 
-  // Top 8 by current month revenue for line chart
-  const top8 = useMemo(() => {
-    return [...(clientsData || [])]
-      .sort((a, b) => {
-        const av = isSheets ? selectedMonths.reduce((s, m) => s + (a.ventaMensual?.[m] || 0), 0) : (a.ventaMensual?.['Ene'] || 0)
-        const bv = isSheets ? selectedMonths.reduce((s, m) => s + (b.ventaMensual?.[m] || 0), 0) : (b.ventaMensual?.['Ene'] || 0)
-        return bv - av
-      })
-      .slice(0, 8)
-  }, [clientsData, selectedMonths, isSheets])
+  // Todos los clientes ordenados por revenue total; los que suman < $1000 van a "Otros"
+  const OTROS_THRESHOLD = 1000
+  const MESES_LOCAL = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+
+  const { bigClients, smallClients } = useMemo(() => {
+    const allCols = isSheets ? meses : MESES_LOCAL
+    const sorted = [...(clientsData || [])].sort((a, b) => {
+      const av = allCols.reduce((s, m) => s + (a.ventaMensual?.[m] || 0), 0)
+      const bv = allCols.reduce((s, m) => s + (b.ventaMensual?.[m] || 0), 0)
+      return bv - av
+    })
+    const big = [], small = []
+    sorted.forEach(c => {
+      const maxMonthly = Math.max(0, ...allCols.map(m => c.ventaMensual?.[m] || 0))
+      if (maxMonthly >= OTROS_THRESHOLD) big.push(c)
+      else small.push(c)
+    })
+    return { bigClients: big, smallClients: small }
+  }, [clientsData, meses, isSheets])
+
+  const chartClients = useMemo(() => [
+    ...bigClients.map(c => c.nombre),
+    ...(smallClients.length > 0 ? ['Otros'] : []),
+  ], [bigClients, smallClients])
 
   const lineData = useMemo(() => {
+    const hasOthers = smallClients.length > 0
     if (isSheets) {
       return meses.map(col => {
         const row = { mes: mesLabel(col) }
-        top8.forEach(c => { row[c.nombre] = c.ventaMensual?.[col] || 0 })
+        bigClients.forEach(c => { row[c.nombre] = c.ventaMensual?.[col] || 0 })
+        if (hasOthers) row['Otros'] = smallClients.reduce((s, c) => s + (c.ventaMensual?.[col] || 0), 0)
         return row
       })
     }
-    const MESES_LOCAL = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
     return MESES_LOCAL.map(mes => {
       const row = { mes }
-      top8.forEach(c => { row[c.nombre] = c.ventaMensual?.[mes] || 0 })
+      bigClients.forEach(c => { row[c.nombre] = c.ventaMensual?.[mes] || 0 })
+      if (hasOthers) row['Otros'] = smallClients.reduce((s, c) => s + (c.ventaMensual?.[mes] || 0), 0)
       return row
     })
-  }, [top8, meses, isSheets])
+  }, [bigClients, smallClients, meses, isSheets])
 
   const getRevenue = (ventaMensual) => {
     if (isSheets) return selectedMonths.reduce((s, m) => s + (ventaMensual?.[m] || 0), 0)
@@ -110,19 +139,14 @@ export default function Clientes() {
       }
     },
     {
-      key: 'ventaMensual', label: `${mesDisplay} (USD)`, sortable: false, align: 'right',
-      render: v => {
-        const val = getRevenue(v)
-        return <span className={`font-semibold text-sm ${val === 0 ? 'text-danger' : 'text-textPrimary'}`}>{formatUSD(val)}</span>
-      }
+      key: '_feeActual', label: `${mesDisplay} (USD)`, sortable: true, align: 'right',
+      render: v => (
+        <span className={`font-semibold text-sm ${v === 0 ? 'text-danger' : 'text-textPrimary'}`}>{formatUSD(v)}</span>
+      )
     },
     {
-      key: 'ventaMensual', id: 'promedio', label: 'Promedio', sortable: false, align: 'right',
-      render: v => {
-        const vals = Object.values(v || {}).filter(x => typeof x === 'number' && x > 0)
-        const avg = vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : 0
-        return <span className="text-xs text-textSecondary">{formatUSD(Math.round(avg))}</span>
-      }
+      key: '_promedio', label: 'Promedio', sortable: true, align: 'right',
+      render: v => <span className="text-xs text-textSecondary">{formatUSD(v)}</span>
     },
     {
       key: 'estado', label: 'Estado', sortable: true,
@@ -172,8 +196,15 @@ export default function Clientes() {
 
       {/* Line chart */}
       <div className="bg-white rounded-2xl shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-textPrimary mb-4">Evolución mensual — Top 8 Clientes (USD)</h2>
-        <ClientLineChart data={lineData} clients={top8.map(c => c.nombre)} />
+        <h2 className="text-sm font-semibold text-textPrimary mb-4">
+          Facturación mensual apilada — todos los clientes (USD)
+          {smallClients.length > 0 && (
+            <span className="ml-2 text-xs font-normal text-textSecondary">
+              · {smallClients.length} bajo ${OTROS_THRESHOLD.toLocaleString()}/mes agrupados en "Otros"
+            </span>
+          )}
+        </h2>
+        <ClientLineChart data={lineData} clients={chartClients} />
       </div>
 
       {/* Filters */}

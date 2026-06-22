@@ -33,7 +33,7 @@ export function useClientFilters(clients) {
     setSortConfig(prev =>
       prev.key === key
         ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-        : { key, dir: 'asc' }
+        : { key, dir: 'desc' }
     )
   }
 

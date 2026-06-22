@@ -11,9 +11,9 @@ const titles = {
 }
 
 const MODES = [
-  { key: 'mensual', label: 'Mensual' },
+  { key: 'mensual',    label: 'Mensual' },
   { key: 'trimestral', label: 'Trimestral' },
-  { key: 'anual', label: 'Anual' },
+  { key: 'anual',      label: 'Anual' },
 ]
 
 export default function Header({ onMenuClick }) {
@@ -25,70 +25,91 @@ export default function Header({ onMenuClick }) {
     availableMonths, setMode, setSelectedMonth, setSelectedQuarter,
   } = useGlobalPeriod()
 
-  // Extraer meses unicos y years
   const years = [...new Set(availableMonths.map(m => m.split('-')[1]))].sort()
   const monthsForYear = availableMonths.filter(m => m.split('-')[1] === selectedYear)
 
+  const selectStyle = {
+    fontFamily:    'var(--font-mono)',
+    fontSize:      '11px',
+    letterSpacing: '0.06em',
+    color:         'var(--k)',
+    background:    'var(--w)',
+    border:        'var(--bw) solid var(--bdr)',
+    borderRadius:  'var(--r-tag)',
+    padding:       '5px 10px',
+    outline:       'none',
+    cursor:        'pointer',
+  }
+
   return (
-    <header className="bg-white border-b px-4 lg:px-6 py-3 flex items-center justify-between sticky top-0 z-10"
-      style={{ borderColor: 'rgba(89,215,162,0.15)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
+    <header
+      className="sticky top-0 z-10 flex items-center justify-between px-4 lg:px-6 py-3"
+      style={{
+        background:   'rgba(250,251,249,0.92)',
+        backdropFilter: 'blur(8px)',
+        borderBottom: 'var(--bw) solid var(--bdr)',
+      }}
+    >
       <div className="flex items-center gap-3">
         <button
           onClick={onMenuClick}
-          className="lg:hidden p-1.5 rounded-lg hover:bg-gray-100"
-          style={{ color: '#0A0A0B' }}
+          className="lg:hidden p-1.5"
+          style={{ color: 'var(--mu)', borderRadius: 'var(--r-tag)' }}
         >
           <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" d="M4 6h16M4 12h16M4 18h16"/>
           </svg>
         </button>
-        <h1
-          className="text-xl font-semibold"
-          style={{ fontFamily: 'Poppins, sans-serif', color: '#0A0A0B', letterSpacing: '-0.02em' }}
-        >
+        <h1 style={{
+          fontFamily:    'var(--font-display)',
+          fontSize:      '21px',
+          fontWeight:    700,
+          letterSpacing: '-0.02em',
+          lineHeight:    1.05,
+          color:         'var(--k)',
+        }}>
           {title}
         </h1>
       </div>
 
-      {/* Period Selector */}
+      {/* Period selector */}
       <div className="flex items-center gap-2">
-        {/* Mode toggle */}
-        <div className="flex items-center gap-0.5 rounded-lg p-0.5" style={{ backgroundColor: 'rgba(89,215,162,0.08)' }}>
+
+        {/* Mode pill */}
+        <div className="flex gap-0.5 p-1" style={{ background: 'var(--gray)', borderRadius: 'var(--r-pill)' }}>
           {MODES.map(m => (
             <button
               key={m.key}
               onClick={() => setMode(m.key)}
-              className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-200"
-              style={
-                mode === m.key
-                  ? {
-                      background: 'linear-gradient(135deg, #59D7A2, #53924D)',
-                      color: '#fff',
-                      boxShadow: '0 2px 8px rgba(89,215,162,0.30)',
-                      fontFamily: 'Poppins, sans-serif',
-                    }
-                  : {
-                      color: 'rgba(10,10,11,0.55)',
-                      fontFamily: 'Poppins, sans-serif',
-                    }
-              }
+              style={{
+                fontFamily:    'var(--font-mono)',
+                fontSize:      '11px',
+                letterSpacing: '0.04em',
+                fontWeight:    mode === m.key ? 600 : 400,
+                padding:       '5px 14px',
+                borderRadius:  'var(--r-pill)',
+                border:        'none',
+                cursor:        'pointer',
+                transition:    'background .15s, color .15s',
+                background:    mode === m.key ? '#59D7A2' : 'transparent',
+                color:         mode === m.key ? '#0A0A0B' : 'var(--mu)',
+              }}
             >
               {m.label}
             </button>
           ))}
         </div>
 
-        {/* Period picker */}
+        {/* Mensual picker */}
         {mode === 'mensual' && monthsForYear.length > 0 && (
           <select
             value={selectedMonth || ''}
             onChange={e => setSelectedMonth(e.target.value)}
-            className="text-xs font-semibold border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
-            style={{ fontFamily: 'Poppins, sans-serif' }}
+            style={selectStyle}
           >
             {monthsForYear.map(m => {
               const prefix = m.split('-')[0]
-              const yr = m.split('-')[1]
+              const yr     = m.split('-')[1]
               return (
                 <option key={m} value={m}>
                   {MES_LABELS[prefix] || prefix} '{yr}
@@ -98,18 +119,24 @@ export default function Header({ onMenuClick }) {
           </select>
         )}
 
+        {/* Trimestral picker */}
         {mode === 'trimestral' && (
-          <div className="flex items-center gap-0.5 rounded-lg p-0.5 bg-gray-100">
+          <div className="flex gap-0.5 p-1" style={{ background: 'var(--gray)', borderRadius: 'var(--r-pill)' }}>
             {[1, 2, 3, 4].map(q => (
               <button
                 key={q}
                 onClick={() => setSelectedQuarter(q)}
-                className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
-                  selectedQuarter === q
-                    ? 'bg-white text-textPrimary shadow-sm'
-                    : 'text-textSecondary hover:text-textPrimary'
-                }`}
-                style={{ fontFamily: 'Poppins, sans-serif' }}
+                style={{
+                  fontFamily:  'var(--font-mono)',
+                  fontSize:    '11px',
+                  fontWeight:  selectedQuarter === q ? 600 : 400,
+                  padding:     '4px 10px',
+                  borderRadius:'var(--r-pill)',
+                  border:      'none',
+                  cursor:      'pointer',
+                  background:  selectedQuarter === q ? '#59D7A2' : 'transparent',
+                  color:       selectedQuarter === q ? '#0A0A0B' : 'var(--mu)',
+                }}
               >
                 Q{q}
               </button>
@@ -117,12 +144,12 @@ export default function Header({ onMenuClick }) {
           </div>
         )}
 
+        {/* Anual picker */}
         {mode === 'anual' && years.length > 1 && (
           <select
             value={selectedYear}
             onChange={e => useGlobalPeriod.getState().setSelectedYear(e.target.value)}
-            className="text-xs font-semibold border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-accent/30"
-            style={{ fontFamily: 'Poppins, sans-serif' }}
+            style={selectStyle}
           >
             {years.map(y => (
               <option key={y} value={y}>20{y}</option>

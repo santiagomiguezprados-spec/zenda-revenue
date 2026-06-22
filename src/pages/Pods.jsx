@@ -85,9 +85,14 @@ export default function Pods() {
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-xs text-textSecondary">Margen Neto</p>
-                  <span className={`text-lg font-bold ${pod.metricas.margenPct > 20 ? 'text-success' : pod.metricas.margenPct >= 0 ? 'text-warning' : 'text-danger'}`}>
-                    {formatPct(pod.metricas.margenPct)}
-                  </span>
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-lg font-bold ${pod.metricas.margenPct > 20 ? 'text-success' : pod.metricas.margenPct >= 0 ? 'text-warning' : 'text-danger'}`}>
+                      {formatUSD(pod.metricas.margen)}
+                    </span>
+                    <span className={`text-sm font-semibold ${pod.metricas.margenPct > 20 ? 'text-success' : pod.metricas.margenPct >= 0 ? 'text-warning' : 'text-danger'}`}>
+                      {formatPct(pod.metricas.margenPct)}
+                    </span>
+                  </div>
                 </div>
                 <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
                   <div

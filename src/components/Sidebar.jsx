@@ -1,18 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import ZendaLogo from './ZendaLogo'
-import useGlobalPeriod, { MES_LABELS, MES_ABR } from '../hooks/useGlobalPeriod'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-
-function buildFallbackMonths() {
-  const now = new Date()
-  const months = []
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    months.push(`${MES_ABR[d.getMonth()]}-${String(d.getFullYear()).slice(2)}`)
-  }
-  return months
-}
 
 const nav = [
   {
@@ -75,116 +64,6 @@ const nav = [
   },
 ]
 
-function PeriodSelector() {
-  const mode            = useGlobalPeriod(s => s.mode)
-  const setMode         = useGlobalPeriod(s => s.setMode)
-  const selectedMonth   = useGlobalPeriod(s => s.selectedMonth)
-  const setSelectedMonth = useGlobalPeriod(s => s.setSelectedMonth)
-  const selectedQuarter = useGlobalPeriod(s => s.selectedQuarter)
-  const setSelectedQuarter = useGlobalPeriod(s => s.setSelectedQuarter)
-  const selectedYear    = useGlobalPeriod(s => s.selectedYear)
-  const setSelectedYear = useGlobalPeriod(s => s.setSelectedYear)
-  const availableMonths = useGlobalPeriod(s => s.availableMonths)
-
-  const usingSheet = import.meta.env.VITE_GOOGLE_SHEET_ID && import.meta.env.VITE_GOOGLE_API_KEY
-  const months = availableMonths.length > 0 ? availableMonths : (usingSheet ? [] : buildFallbackMonths())
-  const years = [...new Set(months.map(m => m.split('-')[1]))].sort()
-
-  const effectiveMonth = selectedMonth && months.includes(selectedMonth)
-    ? selectedMonth
-    : months[months.length - 1]
-
-  function formatMonth(col) {
-    const [prefix, yr] = col.split('-')
-    return `${MES_LABELS[prefix] || prefix} '${yr}`
-  }
-
-  const pill = 'flex-1 py-1 text-xs font-medium rounded-lg transition-all duration-150 text-center'
-  const pillActive = 'text-[#0A0A0B] font-semibold'
-  const pillInactive = 'text-white/50 hover:text-white/80'
-
-  return (
-    <div className="mx-3 mb-3 px-3 py-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
-      <p className="text-white/40 text-[10px] font-semibold uppercase tracking-widest mb-2">Período</p>
-
-      {/* Mode pills */}
-      <div className="flex gap-1 mb-3">
-        {[['mensual','Mensual'],['trimestral','Trim.'],['anual','Anual']].map(([val, label]) => (
-          <button
-            key={val}
-            onClick={() => setMode(val)}
-            className={`${pill} ${mode === val ? pillActive : pillInactive}`}
-            style={mode === val ? { background: 'linear-gradient(135deg, #59D7A2, #53924D)' } : {}}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Mensual: dropdown de mes */}
-      {mode === 'mensual' && (
-        <select
-          value={effectiveMonth || ''}
-          onChange={e => setSelectedMonth(e.target.value)}
-          className="w-full bg-white/10 text-white text-xs rounded-lg px-2 py-1.5 outline-none border border-white/10 focus:border-[#59D7A2] transition cursor-pointer"
-        >
-          {months.map(m => (
-            <option key={m} value={m} className="bg-[#1a1a1b] text-white">
-              {formatMonth(m)}
-            </option>
-          ))}
-        </select>
-      )}
-
-      {/* Trimestral: Q buttons + year */}
-      {mode === 'trimestral' && (
-        <div className="flex flex-col gap-2">
-          <div className="flex gap-1">
-            {[1,2,3,4].map(q => (
-              <button
-                key={q}
-                onClick={() => setSelectedQuarter(q)}
-                className={`flex-1 py-1 text-xs font-medium rounded-lg transition-all ${
-                  selectedQuarter === q
-                    ? 'text-[#0A0A0B] font-semibold'
-                    : 'text-white/50 hover:text-white/80 bg-white/5'
-                }`}
-                style={selectedQuarter === q ? { background: 'linear-gradient(135deg, #59D7A2, #53924D)' } : {}}
-              >
-                Q{q}
-              </button>
-            ))}
-          </div>
-          {years.length > 1 && (
-            <select
-              value={selectedYear}
-              onChange={e => setSelectedYear(e.target.value)}
-              className="w-full bg-white/10 text-white text-xs rounded-lg px-2 py-1.5 outline-none border border-white/10 focus:border-[#59D7A2] transition cursor-pointer"
-            >
-              {years.map(y => (
-                <option key={y} value={y} className="bg-[#1a1a1b] text-white">'{y}</option>
-              ))}
-            </select>
-          )}
-        </div>
-      )}
-
-      {/* Anual: solo year */}
-      {mode === 'anual' && years.length > 0 && (
-        <select
-          value={selectedYear}
-          onChange={e => setSelectedYear(e.target.value)}
-          className="w-full bg-white/10 text-white text-xs rounded-lg px-2 py-1.5 outline-none border border-white/10 focus:border-[#59D7A2] transition cursor-pointer"
-        >
-          {years.map(y => (
-            <option key={y} value={y} className="bg-[#1a1a1b] text-white">'{y}</option>
-          ))}
-        </select>
-      )}
-    </div>
-  )
-}
-
 export default function Sidebar({ open, onClose }) {
   const navigate = useNavigate()
   const { session } = useAuth()
@@ -196,12 +75,10 @@ export default function Sidebar({ open, onClose }) {
     }
   }
 
-  // Extraer email del usuario
   const userEmail = session && session !== 'bypass' ? session.user?.email : null
 
   return (
     <>
-      {/* Overlay mobile */}
       {open && (
         <div className="fixed inset-0 bg-black/40 z-20 lg:hidden" onClick={onClose} />
       )}
@@ -213,75 +90,88 @@ export default function Sidebar({ open, onClose }) {
           ${open ? 'translate-x-0' : '-translate-x-full'}
           lg:translate-x-0 lg:static lg:h-screen lg:flex-shrink-0
         `}
-        style={{ background: 'linear-gradient(180deg, #141415 0%, #0A0A0B 60%, #050505 100%)' }}
+        style={{ background: '#0A0A0B' }}
       >
         {/* Logo */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+        <div className="flex items-center justify-between px-5 py-4"
+          style={{ borderBottom: 'var(--bw) solid rgba(255,255,255,0.1)' }}>
           <ZendaLogo size="md" variant="sidebar" />
-          <button onClick={onClose} className="text-white/50 hover:text-white lg:hidden text-lg ml-3">✕</button>
+          <button onClick={onClose} className="lg:hidden text-lg ml-3"
+            style={{ color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer' }}>
+            ✕
+          </button>
         </div>
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-5 space-y-1">
-          {nav.map(({ to, label, icon, badge }) => (
+          {nav.map(({ to, label, icon }) => (
             <NavLink
               key={to}
               to={to}
               end={to === '/'}
               onClick={onClose}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
-                ${isActive
-                  ? 'text-white font-semibold shadow-lg'
-                  : 'text-white/60 hover:bg-white/8 hover:text-white/90'
-                }`
-              }
+              className="flex items-center gap-3 px-4 py-3 text-sm transition-all duration-150"
+              style={({ isActive }) => ({
+                borderRadius:  'var(--r-tag)',
+                fontFamily:    'var(--font-body)',
+                fontWeight:    isActive ? 600 : 400,
+                background:    isActive ? '#59D7A2' : 'transparent',
+                color:         isActive ? '#0A0A0B' : 'rgba(255,255,255,0.55)',
+              })}
               title={label}
-              style={({ isActive }) => isActive
-                ? { background: 'linear-gradient(135deg, #59D7A2, #53924D)', boxShadow: '0 4px 15px rgba(89,215,162,0.30)' }
-                : {}
-              }
             >
               <span className="flex-shrink-0">{icon}</span>
-              <span className="font-['Poppins'] flex-1">{label}</span>
-              {badge && (
-                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                  style={{ background: 'rgba(89,215,162,0.15)', color: '#59D7A2' }}>
-                  {badge}
-                </span>
-              )}
+              <span className="flex-1">{label}</span>
             </NavLink>
           ))}
         </nav>
 
-
-        {/* Period selector */}
-        <PeriodSelector />
-
-        {/* Divider + user / logout */}
-        <div className="mx-4 mb-2 h-px bg-white/10" />
+        {/* Divider + user */}
+        <div className="mx-4 mb-2" style={{ height: 'var(--bw)', background: 'rgba(255,255,255,0.1)' }} />
         <div className="px-5 py-4">
           {userEmail ? (
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                style={{ background: 'linear-gradient(135deg, #59D7A2, #53924D)' }}>
-                {userEmail.split('@')[0].slice(0,2).toUpperCase()}
+              <div className="w-7 h-7 flex items-center justify-center flex-shrink-0"
+                style={{
+                  background:   '#59D7A2',
+                  borderRadius: 'var(--r-pill)',
+                  color:        '#0A0A0B',
+                  fontFamily:   'var(--font-mono)',
+                  fontSize:     '10px',
+                  fontWeight:   700,
+                }}>
+                {userEmail.split('@')[0].slice(0, 2).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-white/80 text-xs font-medium truncate">{userEmail.split('@')[0]}</p>
-                <p className="text-white/30 text-[10px] truncate">{userEmail}</p>
+                <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '12px', fontWeight: 500 }} className="truncate">
+                  {userEmail.split('@')[0]}
+                </p>
+                <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '10px' }} className="truncate">
+                  {userEmail}
+                </p>
               </div>
             </div>
           ) : (
             <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: '#59D7A2' }} />
-              <span className="text-white/50 text-xs font-medium">En vivo</span>
+              <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--g)' }} />
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', fontFamily: 'var(--font-mono)' }}>
+                En vivo
+              </span>
             </div>
           )}
           {isSupabaseConfigured && (
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-white/50 hover:text-white hover:bg-white/8 transition-all"
+              className="w-full flex items-center gap-2 px-3 py-2 transition-all"
+              style={{
+                fontFamily:   'var(--font-body)',
+                fontSize:     '12px',
+                color:        'rgba(255,255,255,0.4)',
+                background:   'none',
+                border:       'none',
+                borderRadius: 'var(--r-tag)',
+                cursor:       'pointer',
+              }}
             >
               <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -291,7 +181,9 @@ export default function Sidebar({ open, onClose }) {
               Cerrar sesión
             </button>
           )}
-          <p className="text-white/25 text-[10px] mt-2">Zenda Dashboard v1.0</p>
+          <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: '10px', marginTop: '8px', fontFamily: 'var(--font-mono)' }}>
+            Zenda Dashboard v1.0
+          </p>
         </div>
       </aside>
     </>

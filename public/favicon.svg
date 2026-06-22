@@ -1,17 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none">
   <defs>
-    <linearGradient id="bg-g" x1="0" y1="48" x2="48" y2="0" gradientUnits="userSpaceOnUse">
-      <stop offset="0%"   stop-color="#41bfbe"/>
-      <stop offset="100%" stop-color="#009444"/>
-    </linearGradient>
     <linearGradient id="z-g" x1="8" y1="40" x2="40" y2="8" gradientUnits="userSpaceOnUse">
-      <stop offset="0%"   stop-color="#41bfbe"/>
+      <stop offset="0%"   stop-color="#59D7A2"/>
       <stop offset="100%" stop-color="#009444"/>
     </linearGradient>
   </defs>
-  <!-- Fondo blanco redondeado -->
-  <rect width="48" height="48" rx="12" fill="white"/>
-  <!-- Z con stroke redondeado, imitando el isotipo real -->
+  <rect width="48" height="48" rx="12" fill="#0A0A0B"/>
   <path
     d="M11 13 H37 L11 35 H37"
     stroke="url(#z-g)"

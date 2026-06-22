@@ -1,47 +1,74 @@
+import { useRef } from 'react'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
+import { chartDefaults } from '../../lib/zendaChartTheme'
 import { formatUSD } from '../../utils/formatters'
 
-const COLORS = ['#0A2540', '#00C896', '#F0B429', '#3B82F6', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#64748B', '#EF4444']
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-3 text-sm max-w-xs">
-      <p className="font-semibold text-textPrimary mb-2">{label}</p>
-      {payload.map(p => (
-        <div key={p.name} className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
-          <span className="text-textSecondary text-xs truncate">{p.name}:</span>
-          <span className="font-medium text-xs">{formatUSD(p.value)}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
+const CLIENT_COLORS = [
+  '#59D7A2', '#E71CA2', '#95D6EA', '#F59E0B',
+  '#8B5CF6', '#F97316', '#14B8A6', '#6366F1',
+  '#EC4899', '#22D3EE',
+]
 
 export default function ClientLineChart({ data, clients }) {
+  const activeBarRef = useRef(null)
+
+  function CustomTooltip({ active, payload, label }) {
+    if (!active || !payload?.length) return null
+    const activeName = activeBarRef.current
+    const entry = payload.find(p => p.dataKey === activeName)
+    if (!entry) return null
+
+    return (
+      <div style={{
+        background:   '#0A0A0B',
+        borderRadius: '8px',
+        padding:      '10px 14px',
+        fontFamily:   "'Circular Std', sans-serif",
+        fontSize:     '11px',
+        color:        '#fff',
+        minWidth:     '180px',
+      }}>
+        <p style={{ fontWeight: 700, marginBottom: '8px', color: 'rgba(255,255,255,0.5)', fontSize: '10px' }}>
+          {label}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: entry.fill, flexShrink: 0 }} />
+          <span style={{ color: 'rgba(255,255,255,0.75)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
+            {entry.name}
+          </span>
+          <span style={{ fontWeight: 700, flexShrink: 0, color: entry.fill }}>
+            {formatUSD(entry.value)}
+          </span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <ResponsiveContainer width="100%" height={320}>
-      <LineChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-        <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#6B7280' }} />
-        <YAxis tickFormatter={v => `${(v/1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: '#6B7280' }} />
-        <Tooltip content={<CustomTooltip />} />
-        <Legend wrapperStyle={{ fontSize: '10px' }} />
-        {clients.map((name, i) => (
-          <Line
-            key={name}
-            type="monotone"
-            dataKey={name}
-            stroke={COLORS[i % COLORS.length]}
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 4 }}
-          />
-        ))}
-      </LineChart>
+      <BarChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+        <CartesianGrid {...chartDefaults.cartesianGrid} />
+        <XAxis dataKey="mes" {...chartDefaults.xAxis} />
+        <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}k`} {...chartDefaults.yAxis} />
+        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(10,10,11,0.04)' }} />
+        <Legend {...chartDefaults.legend} />
+        {clients.map((name, i) => {
+          const colorIndex = clients.slice(0, i).filter(n => n !== 'Otros').length
+          return (
+            <Bar
+              key={name}
+              dataKey={name}
+              stackId="revenue"
+              fill={name === 'Otros' ? '#9CA3AF' : CLIENT_COLORS[colorIndex % CLIENT_COLORS.length]}
+              radius={i === clients.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+              onMouseEnter={() => { activeBarRef.current = name }}
+              onMouseLeave={() => { activeBarRef.current = null }}
+            />
+          )
+        })}
+      </BarChart>
     </ResponsiveContainer>
   )
 }

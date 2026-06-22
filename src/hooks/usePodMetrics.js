@@ -77,6 +77,7 @@ export function usePodMetrics() {
           grossProfit: Math.round(gop),
           overhead: Math.round(overheadShare),
           total: Math.round(teamCost + overheadShare),
+          margen: Math.round(margin),
           margenPct: Math.round(marginPct * 10) / 10,
         },
         clientes: clients.map(c => ({

@@ -1,69 +1,83 @@
-// Paleta oficial Zenda — BRAND.md
-const BORDER_COLORS = {
-  default:   '#0A0A0B',   // Near Black
-  accent:    '#59D7A2',   // Zenda Green
-  success:   '#59D7A2',   // Zenda Green
-  danger:    '#E53935',
-  warning:   '#F59E0B',
-  secondary: '#E71CA2',   // Zenda Pink
-  tertiary:  '#95D6EA',   // Zenda Cyan
+const VALUE_COLORS = {
+  default:   'var(--k)',
+  accent:    'var(--g-ink)',
+  success:   'var(--up)',
+  danger:    'var(--down)',
+  warning:   'var(--p-ga4)',
+  secondary: 'var(--m)',
+  tertiary:  '#1a6a8a',
 }
 
-const VALUE_COLORS = {
-  default:   '#0A0A0B',
-  accent:    '#59D7A2',
-  success:   '#53924D',   // logo forest (más oscuro, más legible)
-  danger:    '#E53935',
-  warning:   '#F59E0B',
-  secondary: '#E71CA2',
-  tertiary:  '#3BA8C8',
+const BORDER_COLORS = {
+  default:   'var(--bdr)',
+  accent:    'var(--g)',
+  success:   'var(--g)',
+  danger:    'var(--down)',
+  warning:   'var(--p-ga4)',
+  secondary: 'var(--m)',
+  tertiary:  'var(--s)',
 }
 
 const ICON_BG = {
   default:   'rgba(10,10,11,0.06)',
   accent:    'rgba(89,215,162,0.12)',
-  success:   'rgba(89,215,162,0.12)',
-  danger:    'rgba(229,57,53,0.10)',
-  warning:   'rgba(245,158,11,0.10)',
-  secondary: 'rgba(231,28,162,0.10)',
-  tertiary:  'rgba(149,214,234,0.15)',
+  success:   'var(--up-bg)',
+  danger:    'var(--down-bg)',
+  warning:   'rgba(227,116,0,0.10)',
+  secondary: 'rgba(231,28,162,0.08)',
+  tertiary:  'rgba(149,214,234,0.16)',
 }
 
 export default function KPICard({ title, value, subtitle, color = 'default', icon }) {
-  const borderColor = BORDER_COLORS[color] || BORDER_COLORS.default
   const valueColor  = VALUE_COLORS[color]  || VALUE_COLORS.default
+  const borderColor = BORDER_COLORS[color] || BORDER_COLORS.default
   const iconBg      = ICON_BG[color]       || ICON_BG.default
 
   return (
     <div
-      className="bg-white flex flex-col gap-2"
+      className="flex flex-col gap-2 transition-colors"
       style={{
-        borderLeft: `4px solid ${borderColor}`,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.10)',
-        borderRadius: '1rem',
-        padding: '1.25rem',
+        background:     'var(--w)',
+        border:         `var(--bw) solid ${borderColor}`,
+        borderRadius:   'var(--r-card)',
+        padding:        '18px 20px',
+        containerType:  'inline-size',
       }}
     >
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wider"
-          style={{ color: 'rgba(10,10,11,0.64)', fontFamily: 'Poppins, sans-serif' }}>
+        <p style={{
+          fontFamily:    'var(--font-mono)',
+          fontSize:      '10.5px',
+          fontWeight:    500,
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          color:         'var(--mu)',
+        }}>
           {title}
         </p>
         {icon && (
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base"
-            style={{ backgroundColor: iconBg }}>
+          <div className="w-8 h-8 flex items-center justify-center text-base"
+            style={{ backgroundColor: iconBg, borderRadius: 'var(--r-tag)' }}>
             {icon}
           </div>
         )}
       </div>
 
-      <p className="text-2xl font-bold leading-tight"
-        style={{ color: valueColor, fontFamily: 'Poppins, sans-serif' }}>
+      <p style={{
+        fontFamily:    'var(--font-display)',
+        fontWeight:    900,
+        fontSize:      'clamp(16px, 13cqi, 24px)',
+        letterSpacing: '-0.03em',
+        lineHeight:    1,
+        color:         valueColor,
+        whiteSpace:    'nowrap',
+        overflow:      'hidden',
+      }}>
         {value}
       </p>
 
       {subtitle && (
-        <p className="text-xs" style={{ color: 'rgba(10,10,11,0.45)', fontFamily: 'Poppins, sans-serif' }}>
+        <p style={{ fontSize: '12px', color: 'var(--mu)' }}>
           {subtitle}
         </p>
       )}

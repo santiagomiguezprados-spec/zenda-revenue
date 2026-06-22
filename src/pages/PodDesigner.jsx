@@ -11,8 +11,6 @@ import usePodDesignStore from '../store/usePodDesignStore'
 import { usePodMetrics } from '../hooks/usePodMetrics'
 import { formatUSD, formatPct } from '../utils/formatters'
 import { POD_COLORS } from '../utils/podColors'
-import OrgChartImporter from '../components/OrgChartImporter'
-import PodKanban from '../components/PodKanban'
 import useSimulationStore from '../store/useSimulationStore'
 import { usePeriodValues } from '../hooks/useGlobalPeriod'
 import { useAuth } from '../context/AuthContext'
@@ -57,6 +55,21 @@ function dilutionLevel(clientFee, avgFee) {
   if (ratio >= 0.25) return 'warning'  // fee < 50% del promedio
   return 'danger'                      // fee < 25% del promedio
 }
+// ── Columnas de la tabla resumen ─────────────────────────────────────────────
+const TABLE_COLS = [
+  { key: 'id',        label: 'POD',         sortable: false },
+  { key: 'nombre',    label: 'Nombre',       sortable: true },
+  { key: 'nClientes', label: 'Clientes',     sortable: true,  get: p => p.clients.length },
+  { key: 'revenue',   label: 'Revenue',      sortable: true },
+  { key: 'teamCost',  label: 'Costo Equipo', sortable: true },
+  { key: 'gop',       label: 'GOP',          sortable: true },
+  { key: 'gopPct',    label: 'GOP%',         sortable: true },
+  { key: 'overhead',  label: 'Overhead',     sortable: true },
+  { key: 'margin',    label: 'Margen',       sortable: true },
+  { key: 'marginPct', label: 'Margen%',      sortable: true },
+  { key: 'estado',    label: 'Estado',       sortable: false },
+]
+
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function PodDesigner() {
   const { data: teamRaw, source: teamSource, loading: loadingTeam } = useTeamCostoNormalizadoData()
@@ -121,8 +134,8 @@ export default function PodDesigner() {
   const [editingName, setEditingName] = useState(null)
   const [editingValue, setEditingValue] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
-  const [orgImporterOpen, setOrgImporterOpen] = useState(false)
-  const [viewMode, setViewMode] = useState('list') // 'list' | 'kanban'
+  const [tableSort, setTableSort] = useState({ key: 'revenue', dir: 'desc' })
+  const [tableSearch, setTableSearch] = useState('')
 
   // ── Estado versiones ──────────────────────────────────────────────────────
   const [versions, setVersions] = useState([])
@@ -132,15 +145,7 @@ export default function PodDesigner() {
   const [loadingVersions, setLoadingVersions] = useState(false)
   const [restoringId, setRestoringId] = useState(null)
 
-  // ── Pools filtrados ────────────────────────────────────────────────────────
-  const filteredTeam = useMemo(() =>
-    teamPool.filter(m => m.nombre.toLowerCase().includes(search.toLowerCase())),
-    [teamPool, search]
-  )
-  const filteredClients = useMemo(() =>
-    clientPool.filter(c => c.nombre.toLowerCase().includes(search.toLowerCase())),
-    [clientPool, search]
-  )
+  // ── Pools filtrados — se calculan después de memberUsage/clientUsage ──────
 
   // ── Uso de miembros y clientes ─────────────────────────────────────────────
   const memberUsage = useMemo(() => {
@@ -154,6 +159,17 @@ export default function PodDesigner() {
     return usage
   }, [assignments])
 
+  // Equipo disponible: excluye miembros con asignación total >= 100%
+  const filteredTeam = useMemo(() =>
+    teamPool
+      .filter(m => {
+        const totalAlloc = (memberUsage[m.nombre] || []).reduce((s, u) => s + u.allocation, 0)
+        return totalAlloc < 100
+      })
+      .filter(m => m.nombre.toLowerCase().includes(search.toLowerCase())),
+    [teamPool, memberUsage, search]
+  )
+
   const clientUsage = useMemo(() => {
     const usage = {}
     Object.entries(clientAssignments).forEach(([podId, clients]) => {
@@ -161,6 +177,14 @@ export default function PodDesigner() {
     })
     return usage
   }, [clientAssignments])
+
+  // Clientes disponibles: excluye los ya asignados a algún POD
+  const filteredClients = useMemo(() =>
+    clientPool
+      .filter(c => !clientUsage[c.nombre])
+      .filter(c => c.nombre.toLowerCase().includes(search.toLowerCase())),
+    [clientPool, clientUsage, search]
+  )
 
   // ── Fee Model: computed data (aditivo, no modifica nada existente) ────────
 
@@ -181,6 +205,22 @@ export default function PodDesigner() {
     })
     return bands
   }, [podMetrics])
+
+  const sortedTableData = useMemo(() => {
+    let rows = [...podMetrics]
+    if (tableSearch.trim()) {
+      const q = tableSearch.toLowerCase()
+      rows = rows.filter(p => p.id.toLowerCase().includes(q) || (p.nombre || '').toLowerCase().includes(q))
+    }
+    if (!tableSort.key) return rows
+    const col = TABLE_COLS.find(c => c.key === tableSort.key)
+    return rows.sort((a, b) => {
+      const av = col?.get ? col.get(a) : a[tableSort.key]
+      const bv = col?.get ? col.get(b) : b[tableSort.key]
+      if (typeof av === 'string') return tableSort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      return tableSort.dir === 'asc' ? (av ?? 0) - (bv ?? 0) : (bv ?? 0) - (av ?? 0)
+    })
+  }, [podMetrics, tableSort, tableSearch])
 
   /** Cuando hay clientes seleccionados: score de fit para cada POD */
   const podFitForSelected = useMemo(() => {
@@ -315,141 +355,19 @@ export default function PodDesigner() {
     await handleLoadVersions()
   }, [handleLoadVersions])
 
+  const handleTableSort = useCallback((key) => {
+    setTableSort(prev => ({
+      key,
+      dir: prev.key === key && prev.dir === 'desc' ? 'asc' : 'desc',
+    }))
+  }, [])
+
   // ── Render ─────────────────────────────────────────────────────────────────
   const isTargeting = selected.length > 0
   const selectedNames = selected.map(s => s.nombre)
 
   return (
     <div className="space-y-4">
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-bold text-textPrimary">Diseñador de PODs</h1>
-          <p className="text-xs text-textSecondary mt-0.5">
-            Asigna equipo y clientes, renombra o agrega PODs. Los cambios se reflejan en toda la app.
-            {isTargeting && (
-              <span className="ml-2 text-accent font-semibold animate-pulse">
-                → Click en un POD para asignar {selected.length === 1
-                  ? <strong>{selected[0].nombre}</strong>
-                  : <strong>{selected.length} seleccionados</strong>
-                }
-                <span className="ml-1 text-[10px] text-textSecondary font-normal">(Ctrl+Click para multi-selección)</span>
-              </span>
-            )}
-          </p>
-        </div>
-        <div className="flex gap-2 flex-shrink-0 flex-wrap">
-          {/* View mode toggle */}
-          <div className="flex rounded-lg border-2 border-gray-200 overflow-hidden">
-            <button onClick={() => setViewMode('list')}
-              className={`px-3 py-2 text-xs font-semibold transition-colors ${
-                viewMode === 'list' ? 'bg-accent text-white' : 'text-textSecondary hover:bg-gray-50'
-              }`}>
-              📋 Lista
-            </button>
-            <button onClick={() => setViewMode('kanban')}
-              className={`px-3 py-2 text-xs font-semibold transition-colors border-l border-gray-200 ${
-                viewMode === 'kanban' ? 'bg-accent text-white' : 'text-textSecondary hover:bg-gray-50'
-              }`}>
-              🧩 Kanban
-            </button>
-          </div>
-          <button onClick={() => setOrgImporterOpen(true)}
-            className="px-3 py-2 text-xs font-semibold rounded-lg border-2 border-purple-300 text-purple-600 hover:bg-purple-50 transition-colors">
-            🏢 Organigrama
-          </button>
-          <button onClick={handleToggleVersions}
-            className={`px-3 py-2 text-xs font-semibold rounded-lg border-2 transition-colors ${
-              showVersions ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-blue-300 text-blue-600 hover:bg-blue-50'
-            }`}>
-            📋 Versiones
-          </button>
-          <button onClick={handleAddPod}
-            className="px-3 py-2 text-xs font-semibold rounded-lg border-2 border-dashed border-accent text-accent hover:bg-accent/10 transition-colors">
-            + Agregar POD
-          </button>
-          <button onClick={handleReset}
-            className="px-3 py-2 text-xs font-medium border border-gray-200 rounded-lg text-textSecondary hover:bg-gray-50 transition-colors">
-            Resetear
-          </button>
-          <button onClick={handleExport}
-            className="px-3 py-2 text-xs font-semibold rounded-lg text-white transition-colors"
-            style={{ background: 'linear-gradient(135deg, #30b299, #05a779)' }}>
-            Exportar
-          </button>
-        </div>
-      </div>
-
-      {/* Panel de versiones */}
-      {showVersions && (
-        <div className="bg-white rounded-2xl shadow-md border border-blue-200 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-textPrimary flex items-center gap-2">
-              📋 Historial de versiones
-              <span className="text-[10px] font-normal text-textSecondary">Guarda y restaura configuraciones de PODs</span>
-            </h3>
-            <button onClick={() => setShowVersions(false)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
-          </div>
-
-          {/* Guardar nueva versión */}
-          <div className="flex gap-2 items-center">
-            <input
-              type="text"
-              placeholder={`Versión ${new Date().toLocaleDateString('es-AR')} ${new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}
-              value={versionName}
-              onChange={e => setVersionName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSaveVersion()}
-              className="flex-1 text-xs border-2 border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400"
-            />
-            <button onClick={handleSaveVersion}
-              disabled={savingVersion}
-              className="px-4 py-2 text-xs font-semibold rounded-lg text-white transition-colors disabled:opacity-50"
-              style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)' }}>
-              {savingVersion ? '⟳ Guardando...' : '💾 Guardar versión actual'}
-            </button>
-          </div>
-
-          {/* Lista de versiones */}
-          {loadingVersions ? (
-            <p className="text-xs text-textSecondary text-center py-4">⟳ Cargando versiones...</p>
-          ) : versions.length === 0 ? (
-            <p className="text-xs text-textSecondary text-center py-4 italic">
-              No hay versiones guardadas. Guarda una para poder restaurarla después.
-            </p>
-          ) : (
-            <div className="space-y-1.5 max-h-60 overflow-y-auto">
-              {versions.map((v, i) => (
-                <div key={v.id}
-                  className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all group">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                      {versions.length - i}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-textPrimary truncate">{v.name}</p>
-                      <p className="text-[10px] text-textSecondary">
-                        {new Date(v.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <button onClick={() => handleRestoreVersion(v.id)}
-                      disabled={restoringId === v.id}
-                      className="px-2.5 py-1 text-[10px] font-bold rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50">
-                      {restoringId === v.id ? '⟳' : '↩ Restaurar'}
-                    </button>
-                    <button onClick={() => handleDeleteVersion(v.id)}
-                      className="px-2 py-1 text-[10px] font-bold rounded-md text-gray-400 hover:text-danger hover:bg-danger/10 transition-colors opacity-0 group-hover:opacity-100">
-                      🗑
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -497,6 +415,97 @@ export default function PodDesigner() {
         </div>
       </div>
 
+      {/* Acciones */}
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={handleToggleVersions}
+          className={`px-3 py-2 text-xs font-semibold rounded-lg border-2 transition-colors ${
+            showVersions ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-blue-300 text-blue-600 hover:bg-blue-50'
+          }`}>
+          📋 Versiones
+        </button>
+        <button onClick={handleAddPod}
+          className="px-3 py-2 text-xs font-semibold rounded-lg border-2 border-dashed border-accent text-accent hover:bg-accent/10 transition-colors">
+          + Agregar POD
+        </button>
+        <button onClick={handleReset}
+          className="px-3 py-2 text-xs font-medium border border-gray-200 rounded-lg text-textSecondary hover:bg-gray-50 transition-colors">
+          Resetear
+        </button>
+        <button onClick={handleExport}
+          className="px-3 py-2 text-xs font-semibold rounded-lg transition-colors"
+          style={{ background: '#59D7A2', color: '#0A0A0B' }}>
+          Exportar
+        </button>
+      </div>
+
+      {/* Panel de versiones */}
+      {showVersions && (
+        <div className="bg-white rounded-2xl shadow-md border border-blue-200 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-textPrimary flex items-center gap-2">
+              📋 Historial de versiones
+              <span className="text-[10px] font-normal text-textSecondary">Guarda y restaura configuraciones de PODs</span>
+            </h3>
+            <button onClick={() => setShowVersions(false)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+          </div>
+
+          <div className="flex gap-2 items-center">
+            <input
+              type="text"
+              placeholder={`Versión ${new Date().toLocaleDateString('es-AR')} ${new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}
+              value={versionName}
+              onChange={e => setVersionName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSaveVersion()}
+              className="flex-1 text-xs border-2 border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400"
+            />
+            <button onClick={handleSaveVersion}
+              disabled={savingVersion}
+              className="px-4 py-2 text-xs font-semibold rounded-lg text-white transition-colors disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #3B82F6, #2563EB)' }}>
+              {savingVersion ? '⟳ Guardando...' : '💾 Guardar versión actual'}
+            </button>
+          </div>
+
+          {loadingVersions ? (
+            <p className="text-xs text-textSecondary text-center py-4">⟳ Cargando versiones...</p>
+          ) : versions.length === 0 ? (
+            <p className="text-xs text-textSecondary text-center py-4 italic">
+              No hay versiones guardadas. Guarda una para poder restaurarla después.
+            </p>
+          ) : (
+            <div className="space-y-1.5 max-h-60 overflow-y-auto">
+              {versions.map((v, i) => (
+                <div key={v.id}
+                  className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all group">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                      {versions.length - i}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-textPrimary truncate">{v.name}</p>
+                      <p className="text-[10px] text-textSecondary">
+                        {new Date(v.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button onClick={() => handleRestoreVersion(v.id)}
+                      disabled={restoringId === v.id}
+                      className="px-2.5 py-1 text-[10px] font-bold rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50">
+                      {restoringId === v.id ? '⟳' : '↩ Restaurar'}
+                    </button>
+                    <button onClick={() => handleDeleteVersion(v.id)}
+                      className="px-2 py-1 text-[10px] font-bold rounded-md text-gray-400 hover:text-danger hover:bg-danger/10 transition-colors opacity-0 group-hover:opacity-100">
+                      🗑
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Orphan alert */}
       {(_orphanedMembers.length > 0 || _orphanedClients.length > 0) && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
@@ -536,157 +545,148 @@ export default function PodDesigner() {
         <span className="px-2 py-0.5 bg-gray-100 text-textSecondary rounded-full font-medium">{pods.length} PODs</span>
       </div>
 
-      {/* Layout principal — toggle entre lista y kanban */}
-      {viewMode === 'kanban' ? (
-        <PodKanban teamPool={teamPool} clientPool={clientPool} />
-      ) : (
-      <div className="flex gap-4" style={{ alignItems: 'flex-start' }}>
+      {/* ── Pool horizontal ─────────────────────────────────────── */}
+      <div style={{
+        background:   'var(--w)',
+        border:       'var(--bw) solid var(--bdr)',
+        borderRadius: 'var(--r-card)',
+        padding:      '12px 16px',
+      }}>
+        {/* Controles */}
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <div className="flex rounded-lg p-0.5 flex-shrink-0" style={{ background: 'rgba(89,215,162,0.08)' }}>
+            {[
+              { key: 'equipo',   label: 'Equipo',   count: teamPool.length },
+              { key: 'clientes', label: 'Clientes', count: clientPool.length },
+            ].map(tab => (
+              <button key={tab.key}
+                onClick={() => { setPoolTab(tab.key); setSearch(''); setSelected([]) }}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                  poolTab === tab.key ? 'bg-white shadow-sm text-textPrimary' : 'text-textSecondary hover:text-textPrimary'
+                }`}>
+                {tab.label} <span className="opacity-60">({tab.count})</span>
+              </button>
+            ))}
+          </div>
 
-        {/* ─── Pool lateral ─── */}
-        <div className="w-64 flex-shrink-0">
-          <div className="bg-white rounded-2xl shadow-md p-4 sticky top-4 border border-gray-200">
-            <div className="flex rounded-lg p-1 mb-3" style={{ background: 'rgba(89,215,162,0.08)' }}>
-              {[
-                { key: 'equipo', label: 'Equipo', count: teamPool.length },
-                { key: 'clientes', label: 'Clientes', count: clientPool.length },
-              ].map(tab => (
-                <button key={tab.key}
-                  onClick={() => { setPoolTab(tab.key); setSearch(''); setSelected([]) }}
-                  className={`flex-1 text-xs font-semibold py-2 rounded-md transition-all ${
-                    poolTab === tab.key
-                      ? 'bg-white text-textPrimary shadow-sm'
-                      : 'text-textSecondary hover:text-textPrimary'
-                  }`}>
-                  {tab.label} <span className="text-[10px] opacity-60">({tab.count})</span>
-                </button>
-              ))}
-            </div>
+          <input
+            type="text"
+            placeholder={poolTab === 'equipo' ? 'Buscar persona...' : 'Buscar cliente...'}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="text-xs border-2 border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent w-44 flex-shrink-0"
+          />
 
-            <input
-              type="text"
-              placeholder={poolTab === 'equipo' ? 'Buscar persona...' : 'Buscar cliente...'}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full text-xs border-2 border-gray-200 rounded-lg px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent"
-            />
-
-            <div className="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1">
-              {poolTab === 'equipo' && filteredTeam.map(member => {
-                const usage = memberUsage[member.nombre] || []
-                const totalAlloc = usage.reduce((s, u) => s + u.allocation, 0)
-                const isFullyAllocated = totalAlloc >= 100
-                const isSelected = selected.some(s => s.type === 'team' && s.nombre === member.nombre)
-                return (
-                  <div key={member.nombre}
-                    onClick={e => !isFullyAllocated && handleSelect({ type: 'team', nombre: member.nombre, costoUSD: member.costoUSD }, e.ctrlKey || e.metaKey)}
-                    className={`p-2 rounded-lg border transition-all text-xs ${
-                      isFullyAllocated
-                        ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                        : isSelected ? 'border-accent bg-accent/10 shadow-sm cursor-pointer' : 'border-gray-100 hover:border-accent/40 hover:bg-gray-50 cursor-pointer'
-                    }`}>
-                    <div className="flex items-center justify-between gap-1.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[10px] font-bold shadow-sm"
-                          style={{ background: member._simulated ? '#8B5CF6' : isSelected ? '#30b299' : isFullyAllocated ? '#9CA3AF' : '#374151' }}>
-                          {member.nombre.split(' ').map(n => n[0]).join('').slice(0,2)}
-                        </div>
-                        <div className="min-w-0">
-                          <span className={`font-semibold truncate block text-[12px] ${isFullyAllocated ? 'text-gray-400' : 'text-gray-800'}`}>
-                            {member.nombre.split(' ').slice(0,2).join(' ')}
-                          </span>
-                          {member._simulated && (
-                            <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-purple-100 text-purple-600">SIM</span>
-                          )}
-                        </div>
-                      </div>
-                      <span className={`font-bold text-xs flex-shrink-0 ${isFullyAllocated ? 'text-gray-400' : 'text-gray-600'}`}>{formatUSD(member.costoUSD)}</span>
-                    </div>
-                    {usage.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {usage.map(u => (
-                          <span key={u.podId} className="px-1 py-0.5 rounded text-[10px] font-semibold"
-                            style={{ background: (POD_COLORS[u.podId] || '#999') + '25', color: POD_COLORS[u.podId] || '#999' }}>
-                            {u.podId} {u.allocation}%
-                          </span>
-                        ))}
-                        {totalAlloc >= 100 && (
-                          <span className={`px-1 py-0.5 rounded text-[10px] font-bold ${
-                            totalAlloc > 100 ? 'bg-danger/10 text-danger' : 'bg-accent/10 text-accent'
-                          }`}>{totalAlloc > 100 ? `⚠ ${totalAlloc}%` : '100%'}</span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-
-              {poolTab === 'clientes' && filteredClients.map(client => {
-                const assignedTo = clientUsage[client.nombre]
-                const isSelected = selected.some(s => s.type === 'client' && s.nombre === client.nombre)
-                const tier = getFeeTier(client.revenue)
-                return (
-                  <div key={client.nombre}
-                    onClick={e => handleSelect({ type: 'client', nombre: client.nombre, tipo: client.tipo, revenue: client.revenue }, e.ctrlKey || e.metaKey)}
-                    className={`p-2.5 rounded-lg border-2 cursor-pointer transition-all text-xs ${
-                      isSelected ? 'border-accent bg-accent/10 shadow-md'
-                      : assignedTo ? 'border-emerald-300 bg-emerald-50'
-                      : 'border-gray-200 hover:border-accent/50 hover:bg-gray-50 hover:shadow-sm'
-                    }`}>
-                    <div className="flex items-center justify-between gap-1.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 ${
-                          client.tipo === 'A' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-600'
-                        }`}>{client.tipo}</span>
-                        <span className="font-semibold text-gray-800 truncate text-[12px]">{client.nombre}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className={`px-1 py-0.5 rounded text-[8px] font-bold ${tier.bg}`}>{tier.label}</span>
-                        <span className="text-emerald-700 font-bold text-xs">{formatUSD(client.revenue)}</span>
-                      </div>
-                    </div>
-                    {assignedTo && (
-                      <div className="mt-1.5">
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold"
-                          style={{ background: (POD_COLORS[assignedTo] || '#999') + '30', color: POD_COLORS[assignedTo] || '#666' }}>
-                          → {assignedTo}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-
-              {poolTab === 'clientes' && filteredClients.length === 0 && !loadingVentas && (
-                <p className="text-[11px] text-textSecondary text-center py-4 italic">
-                  {ventasData ? 'Sin resultados' : 'Conectar Google Sheets para ver clientes reales'}
-                </p>
-              )}
-            </div>
-
-            <div className="mt-3 pt-3 border-t border-gray-100 text-[11px] text-textSecondary text-center space-y-1">
-              <div>
+          <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+            {selected.length > 0 ? (
+              <>
+                <span className="px-2 py-1 rounded-full font-bold text-[10px] animate-pulse"
+                  style={{ background: 'rgba(89,215,162,0.15)', color: 'var(--g-ink)' }}>
+                  {selected.length} seleccionado{selected.length > 1 ? 's' : ''} → click en un POD
+                </span>
+                <button onClick={() => setSelected([])}
+                  className="text-[10px] text-gray-400 hover:text-danger">✕</button>
+              </>
+            ) : (
+              <p style={{ fontSize: '9px', color: 'var(--mu)', fontStyle: 'italic' }}>
                 {poolTab === 'equipo'
-                  ? (loadingTeam ? '⟳ Cargando...' : `${teamPool.length} personas${newPeople.length > 0 ? ` (${newPeople.length} simuladas)` : ''}`)
+                  ? (loadingTeam ? '⟳ Cargando...' : `${teamPool.length} personas${newPeople.length > 0 ? ` · ${newPeople.length} simuladas` : ''}`)
                   : (loadingVentas ? '⟳ Cargando...' : `${clientPool.length} clientes activos`)
                 }
-              </div>
-              {selected.length > 0 && (
-                <div className="flex items-center justify-center gap-2">
-                  <span className="px-2 py-0.5 bg-accent/15 text-accent rounded-full font-bold text-[10px]">
-                    {selected.length} seleccionado{selected.length > 1 ? 's' : ''}
-                  </span>
-                  <button onClick={() => setSelected([])} className="text-[10px] text-gray-400 hover:text-danger">✕ Limpiar</button>
-                </div>
-              )}
-              {!isTargeting && (
-                <p className="text-[9px] text-gray-400 italic">Ctrl+Click para seleccionar varios</p>
-              )}
-            </div>
+                {' · '}Ctrl+Click para multi-selección
+              </p>
+            )}
           </div>
         </div>
 
-        {/* ─── Grid de PODs ─── */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {/* Chips scroll horizontal */}
+        <div className="flex gap-2 overflow-x-auto" style={{ paddingBottom: '4px', scrollbarWidth: 'thin' }}>
+          {poolTab === 'equipo' && filteredTeam.map(member => {
+            const usage = memberUsage[member.nombre] || []
+            const totalAlloc = usage.reduce((s, u) => s + u.allocation, 0)
+            const isSelected = selected.some(s => s.type === 'team' && s.nombre === member.nombre)
+            return (
+              <div key={member.nombre}
+                onClick={e => handleSelect({ type: 'team', nombre: member.nombre, costoUSD: member.costoUSD }, e.ctrlKey || e.metaKey)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border flex-shrink-0 transition-all cursor-pointer ${
+                  isSelected
+                    ? 'border-accent bg-accent/10 shadow-sm'
+                    : 'border-gray-200 hover:border-accent/40 hover:bg-gray-50'
+                }`}>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                  style={{ background: member._simulated ? '#8B5CF6' : isSelected ? '#30b299' : '#374151' }}>
+                  {member.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                </div>
+                <div>
+                  <div className="font-semibold text-xs text-textPrimary whitespace-nowrap">
+                    {member.nombre.split(' ').slice(0, 2).join(' ')}
+                    {member._simulated && <span className="ml-1 px-1 rounded text-[8px] font-bold bg-purple-100 text-purple-600">SIM</span>}
+                  </div>
+                  <div className="text-[10px] text-textSecondary">{formatUSD(member.costoUSD)}</div>
+                </div>
+                {usage.length > 0 && (
+                  <div className="flex gap-0.5 ml-1">
+                    {usage.map(u => (
+                      <span key={u.podId} className="px-1.5 py-0.5 rounded text-[9px] font-semibold"
+                        style={{ background: (POD_COLORS[u.podId] || '#999') + '25', color: POD_COLORS[u.podId] || '#999' }}>
+                        {u.podId} {u.allocation}%
+                      </span>
+                    ))}
+                    {totalAlloc > 100 && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-danger/10 text-danger">
+                        ⚠ {totalAlloc}%
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {poolTab === 'clientes' && filteredClients.map(client => {
+            const assignedTo = clientUsage[client.nombre]
+            const isSelected = selected.some(s => s.type === 'client' && s.nombre === client.nombre)
+            const tier = getFeeTier(client.revenue)
+            return (
+              <div key={client.nombre}
+                onClick={e => handleSelect({ type: 'client', nombre: client.nombre, tipo: client.tipo, revenue: client.revenue }, e.ctrlKey || e.metaKey)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 cursor-pointer flex-shrink-0 transition-all ${
+                  isSelected
+                    ? 'border-accent bg-accent/10 shadow-md'
+                    : assignedTo
+                    ? 'border-emerald-300 bg-emerald-50'
+                    : 'border-gray-200 hover:border-accent/50 hover:bg-gray-50'
+                }`}>
+                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold flex-shrink-0 ${
+                  client.tipo === 'A' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-600'
+                }`}>{client.tipo}</span>
+                <div>
+                  <div className="font-semibold text-xs text-textPrimary whitespace-nowrap">{client.nombre}</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-1 py-0.5 rounded text-[8px] font-bold ${tier.bg}`}>{tier.label}</span>
+                    <span className="font-bold text-[10px]" style={{ color: '#059669' }}>{formatUSD(client.revenue)}</span>
+                    {assignedTo && (
+                      <span className="px-1 py-0.5 rounded text-[9px] font-bold"
+                        style={{ background: (POD_COLORS[assignedTo] || '#999') + '30', color: POD_COLORS[assignedTo] || '#666' }}>
+                        → {assignedTo}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+
+          {poolTab === 'clientes' && filteredClients.length === 0 && !loadingVentas && (
+            <p className="text-xs italic py-2" style={{ color: 'var(--mu)' }}>
+              {ventasData ? 'Sin resultados' : 'Conectar Google Sheets para ver clientes'}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* ── Grid de PODs — ancho completo ─────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {podMetrics.map((pod, podIndex) => {
             const color = getColor(pod.id, podIndex)
             const isDeleting = confirmDelete === pod.id
@@ -971,27 +971,48 @@ export default function PodDesigner() {
             <span className="text-3xl group-hover:scale-110 transition-transform">+</span>
             <span className="text-xs font-semibold">Agregar POD</span>
           </button>
-        </div>
       </div>
-      )}
 
       {/* Tabla resumen */}
       <div className="bg-white rounded-2xl shadow-sm p-5 overflow-x-auto">
-        <h2 className="text-sm font-bold text-textPrimary mb-4">Resumen comparativo por POD</h2>
+        <div className="flex items-center justify-between mb-4 gap-4">
+          <h2 className="text-sm font-bold text-textPrimary whitespace-nowrap">Resumen comparativo por POD</h2>
+          <input
+            type="text"
+            placeholder="Filtrar por POD o nombre..."
+            value={tableSearch}
+            onChange={e => setTableSearch(e.target.value)}
+            className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent w-56"
+          />
+        </div>
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-gray-100">
-              {['POD','Nombre','Clientes','Revenue','Costo Equipo','GOP','GOP%','Overhead','Margen','Margen%','Estado'].map(h => (
-                <th key={h} className="pb-2 text-left font-semibold text-textSecondary pr-4 whitespace-nowrap">{h}</th>
+              {TABLE_COLS.map(col => (
+                <th key={col.key} className="pb-2 pr-4 text-left whitespace-nowrap">
+                  {col.sortable ? (
+                    <button
+                      onClick={() => handleTableSort(col.key)}
+                      className="flex items-center gap-1 font-semibold transition-colors hover:text-textPrimary"
+                      style={{ color: tableSort.key === col.key ? 'var(--k)' : 'var(--mu)' }}>
+                      {col.label}
+                      <span style={{ fontSize: '9px', opacity: tableSort.key === col.key ? 1 : 0.4 }}>
+                        {tableSort.key === col.key ? (tableSort.dir === 'asc' ? '↑' : '↓') : '↕'}
+                      </span>
+                    </button>
+                  ) : (
+                    <span className="font-semibold text-textSecondary">{col.label}</span>
+                  )}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {podMetrics.map((pod, i) => (
+            {sortedTableData.map((pod, i) => (
               <tr key={pod.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                 <td className="py-2 pr-4">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: getColor(pod.id, i) }} />
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: getColor(pod.id, podMetrics.findIndex(p => p.id === pod.id)) }} />
                     <span className="font-semibold text-textPrimary">{pod.id}</span>
                   </div>
                 </td>
@@ -1007,6 +1028,11 @@ export default function PodDesigner() {
                 <td className="py-2 text-base">{semaforo(pod.marginPct)}</td>
               </tr>
             ))}
+            {sortedTableData.length === 0 && (
+              <tr>
+                <td colSpan={11} className="py-4 text-center text-xs text-textSecondary italic">Sin resultados</td>
+              </tr>
+            )}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-200 font-bold">
@@ -1026,12 +1052,6 @@ export default function PodDesigner() {
         </table>
       </div>
 
-      {/* Org Chart Importer Modal */}
-      <OrgChartImporter
-        open={orgImporterOpen}
-        onClose={() => setOrgImporterOpen(false)}
-        teamPool={teamPool}
-      />
     </div>
   )
 }

@@ -1,20 +1,112 @@
-/* ── Zenda Brand Fonts ─────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@200;300;400;500;600;700;800&display=swap');
+/* ── Zenda Brand Fonts — @font-face ─────────────────────────────────────── */
+@font-face {
+  font-family: 'Recoleta Alt';
+  src: url('../tokens/fonts/RecoletaAlt-Black.woff2') format('woff2');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Recoleta Alt';
+  src: url('../tokens/fonts/RecoletaAlt-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Recoleta Alt';
+  src: url('../tokens/fonts/RecoletaAlt-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Circular Std';
+  src: url('../tokens/fonts/CircularStd-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Circular Std';
+  src: url('../tokens/fonts/CircularStd-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Circular Std';
+  src: url('../tokens/fonts/CircularStd-Book.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Montserrat';
+  src: url('../tokens/fonts/Montserrat-Logo.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── CSS Variables Zenda Brand ─────────────────────────────────────────── */
+/* ── Design Tokens Zenda ────────────────────────────────────────────────── */
 :root {
-  --zenda-green:   #59D7A2;
-  --zenda-pink:    #E71CA2;
-  --zenda-cyan:    #95D6EA;
-  --zenda-dark:    #0A0A0B;
-  --zenda-muted:   rgba(10,10,11,0.64);
-  --zenda-shadow:  rgba(0,0,0,0.10);
-  --logo-teal:     #77BFBE;
-  --logo-forest:   #53924D;
+  /* Marca */
+  --g:      #59D7A2;
+  --g-ink:  #0E7A4E;
+  --g-logo: #009444;
+  --m:      #E71CA2;
+  --m-ink:  #B0157C;
+  --m-cta:  #D91A98;
+  --s:      #95D6EA;
+  --k:      #0A0A0B;
+  --w:      #FAFBF9;
+  --gray:   #F2F3F0;
+  --bdr:    #E4E5E1;
+  --mu:     rgba(10,10,11,.62);
+  --dk:     rgba(255,255,255,.55);
+  --bw:     1.5px;
+
+  /* Semántica reporting */
+  --up:        #0E7A4E;
+  --up-bg:     rgba(89,215,162,.16);
+  --down:      #C2334D;
+  --down-bg:   rgba(194,51,77,.10);
+  --up-dark:   #59D7A2;
+  --down-dark: #FF8298;
+
+  /* Plataformas */
+  --p-google:   #4285F4;
+  --p-meta:     #1877F2;
+  --p-apple:    #1C1C1E;
+  --p-x:        #14171A;
+  --p-linkedin: #0A66C2;
+  --p-ga4:      #E37400;
+  --p-tiktok:   #00B7C4;
+  --p-singular: #FF6B35;
+
+  /* Tipografía */
+  --font-display: 'Recoleta Alt', Georgia, 'Times New Roman', serif;
+  --font-body:    'Circular Std', -apple-system, 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --font-mono:    'SF Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  --font-logo:    'Montserrat', var(--font-body);
+
+  /* Forma */
+  --r-card:  16px;
+  --r-panel: 20px;
+  --r-pill:  100px;
+  --r-tag:   4px;
+
+  /* Aliases para compatibilidad con componentes existentes */
+  --zenda-green: var(--g);
+  --zenda-pink:  var(--m);
+  --zenda-cyan:  var(--s);
+  --zenda-dark:  var(--k);
+  --zenda-muted: var(--mu);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -22,18 +114,17 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Background con gradiente verde sutil (Brand Rule) ─────────────────── */
+/* ── Base reset ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
 body {
   margin: 0;
-  font-family: 'Poppins', system-ui, sans-serif;
-  background: linear-gradient(
-    180deg,
-    rgba(89, 215, 162, 0) 0%,
-    rgba(89, 215, 162, 0.05) 100%
-  );
-  background-color: #ffffff;
-  background-attachment: fixed;
-  color: #0A0A0B;
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--k);
+  background: var(--w);
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
@@ -41,72 +132,125 @@ body {
   min-height: 100vh;
 }
 
-* {
-  box-sizing: border-box;
-}
-
-/* ── Typography ─────────────────────────────────────────────────────────── */
+/* Headings — Recoleta Alt (regla innegociable) */
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Poppins', system-ui, sans-serif;
+  font-family: var(--font-display);
+  line-height: 1.05;
+  font-weight: 700;
   letter-spacing: -0.02em;
-  color: #0A0A0B;
+  color: var(--k);
+}
+h1 { font-size: clamp(40px, 6vw, 64px); font-weight: 900; letter-spacing: -0.04em; }
+h2 { font-size: clamp(28px, 3.5vw, 36px); letter-spacing: -0.03em; }
+h3 { font-size: 21px; letter-spacing: -0.02em; }
+
+p { color: var(--mu); }
+strong { color: var(--k); font-weight: 700; }
+
+/* ── Wordmark "zenda." ──────────────────────────────────────────────────── */
+.wordmark {
+  font-family: var(--font-logo);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+  color: var(--g-logo);
 }
 
-/* ── Buttons base (outlined by default, fill on hover — Brand Rule) ─────── */
+/* ── Mono label pattern ─────────────────────────────────────────────────── */
+.mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+
+/* ── Cards — borde 1.5px, sin box-shadow (regla innegociable) ───────────── */
+.zenda-card {
+  background: var(--w);
+  border-radius: var(--r-card);
+  border: var(--bw) solid var(--bdr);
+  padding: 1rem;
+  transition: border-color .15s;
+}
+.zenda-card:hover { border-color: var(--k); }
+
+/* ── Deltas ↑↓ ──────────────────────────────────────────────────────────── */
+.delta {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+}
+.delta-up   { background: var(--up-bg);              color: var(--up); }
+.delta-down { background: var(--down-bg);            color: var(--down); }
+.delta-flat { background: rgba(10,10,11,.06);        color: var(--mu); }
+
+/* ── Tags ───────────────────────────────────────────────────────────────── */
+.tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: var(--r-tag);
+  background: rgba(10,10,11,.06);
+  color: rgba(10,10,11,.62);
+}
+.tag-g { background: rgba(89,215,162,.14);  color: var(--g-ink); }
+.tag-m { background: rgba(231,28,162,.08);  color: var(--m-ink); }
+.tag-s { background: rgba(149,214,234,.16); color: #1a6a8a; }
+
+/* ── Dark section helpers ───────────────────────────────────────────────── */
+.s-dark { background: var(--k); color: var(--w); }
+.s-dark p         { color: var(--dk); }
+.s-dark strong    { color: #fff; }
+.s-dark .mono     { color: rgba(255,255,255,.5); }
+.s-dark .delta-up   { background: rgba(89,215,162,.14);  color: var(--up-dark); }
+.s-dark .delta-down { background: rgba(255,130,152,.12); color: var(--down-dark); }
+.s-dark .tag        { background: rgba(255,255,255,.08); color: rgba(255,255,255,.55); }
+.s-dark .tag-g      { background: rgba(89,215,162,.14);  color: var(--g); }
+
+/* ── Buttons (bordes, sin shadow) ───────────────────────────────────────── */
 .btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 11rem;
-  height: 2.8rem;
-  border-radius: 0.5rem;
-  border: 1.5px solid var(--zenda-green);
-  color: var(--zenda-green);
-  background: transparent;
-  font-family: 'Poppins', sans-serif;
-  font-weight: 600;
-  font-size: 0.875rem;
-  transition: all 0.4s ease;
+  padding: 12px 26px;
+  border-radius: var(--r-pill);
+  border: var(--bw) solid var(--k);
+  background: var(--k);
+  color: var(--w);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 14px;
   cursor: pointer;
+  transition: background .18s, border-color .18s, transform .18s;
 }
-.btn-primary:hover {
-  background: var(--zenda-green);
-  color: #ffffff;
-}
+.btn-primary:hover { background: var(--m-cta); border-color: var(--m-cta); transform: translateY(-2px); }
+
 .btn-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.5rem;
-  border: 1.5px solid var(--zenda-pink);
-  color: var(--zenda-pink);
-  background: transparent;
-  font-family: 'Poppins', sans-serif;
-  font-weight: 600;
-  font-size: 0.875rem;
-  transition: all 0.4s ease;
-  cursor: pointer;
   padding: 0.5rem 1.25rem;
+  border-radius: var(--r-pill);
+  border: var(--bw) solid var(--bdr);
+  background: transparent;
+  color: var(--k);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color .18s;
 }
-.btn-secondary:hover {
-  background: var(--zenda-pink);
-  color: #ffffff;
-}
+.btn-secondary:hover { border-color: var(--k); }
 
-/* ── Z Mark gradient helper ─────────────────────────────────────────────── */
-.z-gradient {
-  background: linear-gradient(135deg, #77BFBE 0%, #53924D 100%);
-}
-
-/* ── Card base ──────────────────────────────────────────────────────────── */
-.zenda-card {
-  background: #ffffff;
-  border-radius: 1rem;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.10);
-  padding: 1rem;
-}
-
-/* ── Recharts ───────────────────────────────────────────────────────────── */
-.recharts-tooltip-wrapper {
-  z-index: 50;
-}
+/* ── Recharts overrides ─────────────────────────────────────────────────── */
+.recharts-tooltip-wrapper { z-index: 50; }
