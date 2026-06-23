@@ -200,7 +200,7 @@ export default function Clientes() {
           Facturación mensual apilada — todos los clientes (USD)
           {smallClients.length > 0 && (
             <span className="ml-2 text-xs font-normal text-textSecondary">
-              · {smallClients.length} bajo ${OTROS_THRESHOLD.toLocaleString()}/mes agrupados en "Otros"
+              · {smallClients.length} bajo {formatUSD(OTROS_THRESHOLD)}/mes agrupados en "Otros"
             </span>
           )}
         </h2>
