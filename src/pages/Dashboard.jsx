@@ -15,7 +15,7 @@ export default function Dashboard() {
   const { rate, rateData, loading: loadingRate } = useExchangeRate()
   const { data: ventasData, source: ventasSource } = useVentasDolarizadasData()
   const { data: teamData, source: teamSource } = useTeamCostoNormalizadoData()
-  const { podMetrics, globalMetrics: podGlobal, hasDesign, resumenFromDesign, overheadUSD } = usePodMetrics()
+  const { podMetrics, globalMetrics: podGlobal, hasDesign, resumenFromDesign, overheadUSD, overheadPayroll, estructuraUSD } = usePodMetrics()
   const [sortConfig, setSortConfig] = useState({ key: 'revenue', dir: 'desc' })
 
   // ── Periodo ────────────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ export default function Dashboard() {
   const GLOBAL = useMemo(() => {
     // Si hay diseno activo de PODs, usar esos datos (escalados por periodo)
     if (hasDesign) {
-      const overhead = (podGlobal.overhead || overheadUSD || 17413) * costMultiplier
+      const overhead = (podGlobal.overhead || overheadUSD) * costMultiplier
       return {
         revenueClientes: podGlobal.revenue * costMultiplier,
         costoOperativo: podGlobal.teamCost * costMultiplier,
@@ -55,7 +55,7 @@ export default function Dashboard() {
     // Fallback: datos crudos del sheet o JSON
     const revenue = liveRevenue ?? 39196 * costMultiplier
     const operativo = liveCostoOperativo ?? 28338 * costMultiplier
-    const overhead = (overheadUSD || 17413) * costMultiplier
+    const overhead = overheadUSD * costMultiplier
     const gop = revenue - operativo
     const profits = gop - overhead
     return { revenueClientes: revenue, costoOperativo: operativo, costoOverhead: overhead, gop, profits }
@@ -187,7 +187,11 @@ export default function Dashboard() {
         <KPICard
           title="Overhead"
           value={formatUSD(GLOBAL.costoOverhead)}
-          subtitle={`${overheadPct}% del revenue`}
+          subtitle={
+            estructuraUSD > 0
+              ? `C-Level ${formatUSD(overheadPayroll)} · Estructura ${formatUSD(estructuraUSD)} · ${overheadPct}% rev`
+              : `${overheadPct}% del revenue`
+          }
           color="warning"
           icon="🏢"
         />

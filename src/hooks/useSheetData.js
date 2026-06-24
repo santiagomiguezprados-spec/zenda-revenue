@@ -36,3 +36,13 @@ export function useTeamData() {
 export function useClientsData() {
   return useVentasDolarizadasData()
 }
+
+/** Datos P&L mensual desde Datos Looker */
+export function useDatosLookerData() {
+  const data    = useDataStore(s => s.lookerData)
+  const loading = useDataStore(s => s.lookerLoading)
+  const error   = useDataStore(s => s.lookerError)
+  const source  = useDataStore(s => s.lookerSource)
+  const reload  = useDataStore(s => s.fetchLooker)
+  return { data, loading, error, source, reload }
+}

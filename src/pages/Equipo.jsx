@@ -3,12 +3,20 @@ import DataTable from '../components/DataTable'
 import HorizontalBarChart from '../components/Charts/HorizontalBarChart'
 import KPICard from '../components/KPICard'
 import { formatUSD, formatARS } from '../utils/formatters'
-import { useTeamCostoNormalizadoData } from '../hooks/useSheetData'
+import { useTeamCostoNormalizadoData, useDatosLookerData } from '../hooks/useSheetData'
 import useExchangeRate from '../hooks/useExchangeRate'
 import useSimulationStore from '../store/useSimulationStore'
+import { detectCLevel } from '../utils/clevel'
+
+function overheadTipo(nombre) {
+  const flags = detectCLevel(nombre)
+  if (!flags) return 'manual'
+  return flags.cLevelOperativo ? 'C-Level Op.' : 'C-Level'
+}
 
 export default function Equipo() {
   const { data: rawTeam, source } = useTeamCostoNormalizadoData()
+  const { data: lookerData } = useDatosLookerData()
   const { rate: liveRate, rateData, loading: tcLoading, refresh: refreshTC } = useExchangeRate()
 
   const {
@@ -16,15 +24,55 @@ export default function Equipo() {
     toggleSimMode, setTC, setTeamOverride, addPerson, removePerson, resetAll,
   } = useSimulationStore()
 
-  const [newNombre, setNewNombre] = useState('')
-  const [newNeto, setNewNeto]     = useState('')
+  const [newNombre, setNewNombre]           = useState('')
+  const [newNeto, setNewNeto]               = useState('')
+  const [overheadOverrides, setOverheadOverrides] = useState(new Set())
+  const [selectedPeriodo, setSelectedPeriodo]     = useState(null) // null = más reciente
 
   const effectiveTC = simMode ? tc : liveRate
 
-  const equipo   = useMemo(() => (rawTeam || []).filter(p => !p.esOverhead), [rawTeam])
-  const overhead = useMemo(() => (rawTeam || []).filter(p => p.esOverhead),  [rawTeam])
+  // ── Períodos disponibles desde Looker ────────────────────────────────────────
+  const lookerPeriods = useMemo(() =>
+    (lookerData || []).map(d => ({ value: d.periodo, label: d.mes })),
+    [lookerData]
+  )
 
-  // Equipo con USD dinámico y overrides de simulación
+  const currentLooker = useMemo(() => {
+    if (!lookerData?.length) return null
+    if (!selectedPeriodo) return lookerData[lookerData.length - 1]
+    return lookerData.find(d => d.periodo === selectedPeriodo) ?? lookerData[lookerData.length - 1]
+  }, [lookerData, selectedPeriodo])
+
+  const estructuraUSD = currentLooker?.estructura != null ? Math.abs(currentLooker.estructura) : null
+
+  // ── Separación equipo / overhead considerando asignaciones manuales ──────────
+  // esOverhead viene del sheet (sheetsService detecta los 6 por apellido)
+  const equipo = useMemo(() =>
+    (rawTeam || []).filter(p => !p.esOverhead && !overheadOverrides.has(p.nombre)),
+    [rawTeam, overheadOverrides]
+  )
+
+  const overhead = useMemo(() => {
+    const auto = (rawTeam || []).filter(p => p.esOverhead)
+    const manual = (rawTeam || [])
+      .filter(p => !p.esOverhead && overheadOverrides.has(p.nombre))
+      .map(p => ({ ...p, categoria: p.categoria || p.nombre, _manual: true }))
+    return [...auto, ...manual]
+  }, [rawTeam, overheadOverrides])
+
+  function assignToOverhead(nombre) {
+    setOverheadOverrides(prev => new Set([...prev, nombre]))
+  }
+
+  function removeFromOverhead(nombre) {
+    setOverheadOverrides(prev => {
+      const next = new Set(prev)
+      next.delete(nombre)
+      return next
+    })
+  }
+
+  // ── Equipo con USD dinámico y overrides de simulación ────────────────────────
   const equipoEfectivo = useMemo(() => {
     const base = equipo.map(p => {
       const costoBase = p.costoMensualARS || p.neto
@@ -56,12 +104,13 @@ export default function Equipo() {
     [overhead, effectiveTC]
   )
 
-  const totalUSD        = useMemo(() => equipoEfectivo.reduce((s, p) => s + p.costoUSD, 0), [equipoEfectivo])
-  const totalUSDBase    = useMemo(() => equipo.reduce((s, p) => s + Math.round((p.costoMensualARS || p.neto) / liveRate), 0), [equipo, liveRate])
+  const totalUSD         = useMemo(() => equipoEfectivo.reduce((s, p) => s + p.costoUSD, 0), [equipoEfectivo])
+  const totalUSDBase     = useMemo(() => equipo.reduce((s, p) => s + Math.round((p.costoMensualARS || p.neto) / liveRate), 0), [equipo, liveRate])
   const totalOverheadUSD = useMemo(() => overheadEfectivo.reduce((s, p) => s + p.costoUSD, 0), [overheadEfectivo])
-  const headcount       = equipo.length + newPeople.length
-  const promedio        = headcount ? Math.round(totalUSD / headcount) : 0
-  const deltaTotal      = simMode ? totalUSD - totalUSDBase : 0
+  const totalOverheadCompleto = totalOverheadUSD + (estructuraUSD || 0)
+  const headcount        = equipo.length + newPeople.length
+  const promedio         = headcount ? Math.round(totalUSD / headcount) : 0
+  const deltaTotal       = simMode ? totalUSD - totalUSDBase : 0
 
   const chartData = useMemo(() =>
     [...equipoEfectivo].sort((a, b) => b.costoUSD - a.costoUSD),
@@ -75,7 +124,7 @@ export default function Equipo() {
     setNewNeto('')
   }
 
-  // Columnas modo simulación
+  // ── Columnas modo simulación ──────────────────────────────────────────────────
   const simColumns = [
     {
       key: 'nombre', id: 'sim_nombre', label: 'Nombre',
@@ -132,17 +181,29 @@ export default function Equipo() {
       },
     },
     {
-      key: 'nombre', id: 'sim_remove', label: '',
-      render: (v, row) => row.esNuevo ? (
-        <button
-          onClick={() => removePerson(row._idx)}
-          className="text-danger hover:text-danger/70 text-xs font-bold px-2"
-        >✕</button>
-      ) : null,
+      key: 'nombre', id: 'sim_actions', label: '',
+      render: (v, row) => (
+        <div className="flex items-center gap-1">
+          {!row.esNuevo && (
+            <button
+              onClick={() => assignToOverhead(v)}
+              className="text-[10px] text-warning/80 hover:text-warning border border-warning/20 hover:border-warning/50 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap"
+            >
+              → C-Level
+            </button>
+          )}
+          {row.esNuevo && (
+            <button
+              onClick={() => removePerson(row._idx)}
+              className="text-danger hover:text-danger/70 text-xs font-bold px-2"
+            >✕</button>
+          )}
+        </div>
+      ),
     },
   ]
 
-  // Columnas modo normal
+  // ── Columnas modo normal ──────────────────────────────────────────────────────
   const normalColumns = [
     {
       key: 'nombre', label: 'Nombre', sortable: true,
@@ -162,12 +223,55 @@ export default function Equipo() {
       key: 'costoUSD', label: `USD @TC ${effectiveTC.toLocaleString('es-AR')}`, sortable: true, align: 'right',
       render: v => <span className="font-semibold text-primary">{formatUSD(v)}</span>,
     },
+    {
+      key: 'nombre', id: 'assign_overhead', label: '',
+      render: v => (
+        <button
+          onClick={() => assignToOverhead(v)}
+          className="text-[10px] text-warning/70 hover:text-warning border border-warning/20 hover:border-warning/50 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap"
+        >
+          → C-Level
+        </button>
+      ),
+    },
   ]
 
+  // ── Columnas overhead ─────────────────────────────────────────────────────────
   const overheadColumns = [
-    { key: 'categoria', label: 'Rol', render: v => <span className="font-semibold text-textPrimary">{v}</span> },
-    { key: 'neto', label: 'Costo Total ARS', align: 'right', render: v => formatARS(v) },
-    { key: 'costoUSD', label: `USD @${effectiveTC.toLocaleString('es-AR')}`, align: 'right', render: v => <span className="font-semibold text-warning">{formatUSD(v)}</span> },
+    {
+      key: 'nombre', id: 'oh_nombre', label: 'Nombre',
+      render: (v, row) => {
+        const tipo = row._manual ? 'manual' : overheadTipo(v)
+        const badgeStyle = {
+          'C-Level':    'bg-warning/10 text-warning border-warning/20',
+          'C-Level Op.':'bg-primary/10 text-primary border-primary/20',
+          'manual':     'bg-gray-100 text-textSecondary border-gray-200',
+        }[tipo] ?? 'bg-gray-100 text-textSecondary border-gray-200'
+        return (
+          <div className="flex items-center gap-2">
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${badgeStyle}`}>
+              {tipo === 'manual' ? 'MANUAL' : tipo.toUpperCase()}
+            </span>
+            <span className="font-semibold text-textPrimary text-sm">{v}</span>
+          </div>
+        )
+      },
+    },
+    { key: 'neto', label: 'Costo ARS', align: 'right', render: v => <span className="text-sm">{formatARS(v)}</span> },
+    {
+      key: 'costoUSD', label: `USD @${effectiveTC.toLocaleString('es-AR')}`, align: 'right',
+      render: v => <span className="font-semibold text-warning">{formatUSD(v)}</span>,
+    },
+    {
+      key: 'nombre', id: 'remove_overhead', label: '',
+      render: (v, row) => row._manual ? (
+        <button
+          onClick={() => removeFromOverhead(row.nombre)}
+          className="text-danger/60 hover:text-danger text-xs font-bold px-1.5 transition-colors"
+          title="Mover a Equipo Operativo"
+        >✕</button>
+      ) : null,
+    },
   ]
 
   return (
@@ -193,6 +297,23 @@ export default function Equipo() {
             <span className="text-xs bg-success/10 text-success border border-success/20 rounded-xl px-2 py-1 font-medium">
               Google Sheets · live
             </span>
+          )}
+
+          {/* Selector de período para Estructura */}
+          {lookerPeriods.length > 0 && (
+            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
+              <span className="text-xs font-semibold text-textSecondary">Período:</span>
+              <select
+                value={selectedPeriodo || ''}
+                onChange={e => setSelectedPeriodo(e.target.value || null)}
+                className="text-xs font-semibold text-textPrimary bg-transparent border-none outline-none cursor-pointer"
+              >
+                <option value="">Más reciente</option>
+                {[...lookerPeriods].reverse().map(p => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
+              </select>
+            </div>
           )}
         </div>
 
@@ -235,7 +356,6 @@ export default function Equipo() {
               </div>
             </div>
 
-            {/* Delta total */}
             {deltaTotal !== 0 && (
               <div className="bg-white rounded-xl border border-gray-200 px-4 py-2">
                 <p className="text-xs text-textSecondary">Impacto mensual equipo</p>
@@ -294,7 +414,7 @@ export default function Equipo() {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <KPICard
           title="Headcount"
           value={headcount}
@@ -317,11 +437,18 @@ export default function Equipo() {
           subtitle="USD/mes"
         />
         <KPICard
-          title="Total Overhead"
+          title="Overhead C-Level"
           value={formatUSD(totalOverheadUSD)}
           color="warning"
           icon="🏢"
-          subtitle="C-Level + Ops"
+          subtitle={overheadOverrides.size ? `${overheadEfectivo.length} personas (${overheadOverrides.size} manual)` : 'C-Level + Ops'}
+        />
+        <KPICard
+          title="Estructura"
+          value={estructuraUSD !== null ? formatUSD(estructuraUSD) : '—'}
+          color="default"
+          icon="🏗️"
+          subtitle={currentLooker ? `Looker · ${currentLooker.mes}` : 'Sin datos Looker'}
         />
       </div>
 
@@ -334,12 +461,35 @@ export default function Equipo() {
           <HorizontalBarChart data={chartData} dataKey="costoUSD" />
         </div>
 
+        {/* Overhead card */}
         <div className="bg-white rounded-2xl shadow-sm p-5">
           <h2 className="text-sm font-semibold text-textPrimary mb-4">Overhead C-Level</h2>
           <DataTable columns={overheadColumns} data={overheadEfectivo} compact />
-          <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between">
-            <span className="text-xs font-semibold text-textSecondary">Total Overhead</span>
-            <span className="text-sm font-bold text-warning">{formatUSD(totalOverheadUSD)}/mes</span>
+
+          {/* Estructura row */}
+          {estructuraUSD !== null && (
+            <>
+              <div className="mt-3 pt-3 border-t border-dashed border-gray-200 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-textSecondary">Estructura</span>
+                  <span className="text-[10px] text-textSecondary/60 border border-gray-200 rounded px-1.5 py-0.5">
+                    {currentLooker?.mes}
+                  </span>
+                  <span className="text-[10px] text-textSecondary/50">Alquiler · Plataformas · Honorarios · G&A</span>
+                </div>
+                <span className="text-sm font-semibold text-textPrimary">{formatUSD(estructuraUSD)}</span>
+              </div>
+            </>
+          )}
+
+          {/* Total */}
+          <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
+            <span className="text-xs font-semibold text-textSecondary">
+              Total Overhead{estructuraUSD !== null ? ' (C-Level + Estructura)' : ''}
+            </span>
+            <span className="text-sm font-bold text-warning">
+              {formatUSD(estructuraUSD !== null ? totalOverheadCompleto : totalOverheadUSD)}/mes
+            </span>
           </div>
         </div>
       </div>

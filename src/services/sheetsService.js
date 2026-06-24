@@ -6,23 +6,31 @@
  *   VITE_GOOGLE_API_KEY=<api key de Google Cloud>
  */
 
-const SHEET_ID   = import.meta.env.VITE_GOOGLE_SHEET_ID
-const API_KEY    = import.meta.env.VITE_GOOGLE_API_KEY
-const BASE       = 'https://sheets.googleapis.com/v4/spreadsheets'
+import { C_LEVEL_ALL, detectCLevel } from '../utils/clevel'
 
-export const TAB_VENTAS  = import.meta.env.VITE_TAB_VENTAS  || 'Ventas Dolarizadas'
-export const TAB_TEAM    = import.meta.env.VITE_TAB_TEAM    || 'Team Costo Normalizado'
-export const TAB_SUELDOS = import.meta.env.VITE_TAB_SUELDOS || 'Sueldos'
+const SHEET_ID        = import.meta.env.VITE_GOOGLE_SHEET_ID
+const API_KEY         = import.meta.env.VITE_GOOGLE_API_KEY
+const BASE            = 'https://sheets.googleapis.com/v4/spreadsheets'
 
-/** True si las variables de entorno están configuradas */
+export const LOOKER_SHEET_ID    = import.meta.env.VITE_LOOKER_SHEET_ID
+export const TAB_VENTAS         = import.meta.env.VITE_TAB_VENTAS        || 'Ventas Dolarizadas'
+export const TAB_TEAM           = import.meta.env.VITE_TAB_TEAM          || 'Team Costo Normalizado'
+export const TAB_SUELDOS        = import.meta.env.VITE_TAB_SUELDOS       || 'Sueldos'
+export const TAB_DATOS_LOOKER   = import.meta.env.VITE_TAB_DATOS_LOOKER  || 'Datos - Global'
+
+/** True si las variables de entorno del sheet principal están configuradas */
 export const isConfigured = () =>
   !!(SHEET_ID && API_KEY && SHEET_ID !== 'YOUR_SHEET_ID' && API_KEY !== 'YOUR_API_KEY')
 
-/** Obtiene un rango de una solapa. Devuelve array de arrays (rows). */
-async function getRange(tabName, range = '') {
+/** True si el sheet de Looker está configurado */
+export const isLookerConfigured = () =>
+  !!(LOOKER_SHEET_ID && API_KEY && LOOKER_SHEET_ID !== 'YOUR_LOOKER_SHEET_ID')
+
+/** Obtiene un rango de una solapa en cualquier sheet. Devuelve array de arrays (rows). */
+async function getRange(sheetId, tabName, range = '') {
   const encodedTab = encodeURIComponent(tabName)
   const rangeParam = range ? `${encodedTab}!${range}` : encodedTab
-  const url = `${BASE}/${SHEET_ID}/values/${rangeParam}?key=${API_KEY}`
+  const url = `${BASE}/${sheetId}/values/${rangeParam}?key=${API_KEY}`
   const res = await fetch(url)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -67,7 +75,7 @@ function find(obj, keys) {
 // SUELDOS  →  formato team_cost.json
 // ─────────────────────────────────────────────
 export async function fetchSueldos(tabName = 'Sueldos') {
-  const rows = await getRange(tabName)
+  const rows = await getRange(SHEET_ID, tabName)
   const objects = rowsToObjects(rows)
 
   return objects.map(obj => {
@@ -125,7 +133,7 @@ const MES_ALIAS = {
 }
 
 export async function fetchComercial(tabName = 'Comercial Global') {
-  const rows = await getRange(tabName)
+  const rows = await getRange(SHEET_ID, tabName)
   const objects = rowsToObjects(rows)
 
   return objects.map(obj => {
@@ -159,7 +167,7 @@ export async function fetchComercial(tabName = 'Comercial Global') {
 // TEAM COSTO NORMALIZADO  →  formato team_cost.json
 // ─────────────────────────────────────────────
 export async function fetchTeamCostoNormalizado(tabName = 'Team Costo Normalizado') {
-  const rows = await getRange(tabName)
+  const rows = await getRange(SHEET_ID, tabName)
   const objects = rowsToObjects(rows)
 
   return objects.map(obj => {
@@ -173,9 +181,13 @@ export async function fetchTeamCostoNormalizado(tabName = 'Team Costo Normalizad
     const vac     = num(find(obj, ['Vac', 'Vac.', 'Vacaciones', 'vacaciones', 'Provisión Vacaciones']))
 
     const catRaw = find(obj, ['Categoria', 'categoria', 'Categoría', 'Tipo', 'Rol'])
-    const esOverhead = ['ceo', 'cmo', 'coo', 'overhead', 'c-level'].some(k =>
-      catRaw.toLowerCase().includes(k) || nombre.toLowerCase().includes(k)
+
+    // Detección por apellido primero (garantiza match sin depender de keywords)
+    const cLevelFlags = detectCLevel(nombre)
+    const esOverhead = !!cLevelFlags || ['ceo', 'cmo', 'coo', 'overhead', 'c-level'].some(k =>
+      catRaw.toLowerCase().includes(k)
     )
+    const cLevelOperativo = cLevelFlags?.cLevelOperativo || false
 
     const efectivoMensual = costoMensualARS || (neto + cargas + sac / 12 + vac / 12)
 
@@ -191,6 +203,7 @@ export async function fetchTeamCostoNormalizado(tabName = 'Team Costo Normalizad
       sac,
       vacaciones: vac,
       ...(esOverhead && { esOverhead: true, categoria: catRaw || nombre }),
+      ...(cLevelOperativo && { cLevelOperativo: true }),
     }
   }).filter(Boolean)
 }
@@ -202,7 +215,7 @@ export async function fetchTeamCostoNormalizado(tabName = 'Team Costo Normalizad
 const MES_COL_RE = /^[a-z]{3,4}-\d{2}$/i
 
 export async function fetchVentasDolarizadas(tabName = 'Ventas Dolarizadas') {
-  const rows = await getRange(tabName)
+  const rows = await getRange(SHEET_ID, tabName)
   if (!rows.length) return []
 
   const [headers] = rows
@@ -241,4 +254,52 @@ export async function fetchSheetNames() {
   if (!res.ok) return []
   const json = await res.json()
   return (json.sheets || []).map(s => s.properties.title)
+}
+
+// ─────────────────────────────────────────────
+// DATOS LOOKER  →  P&L mensual (EBITDA, Revenue, Costos, Margen)
+// Sheet: 1AOe1RPrJrALdWApX4JlkV_AujwzyfgVhXufcdpIh8VA
+// Tab:   Datos - Global
+// Periodo formato: "MM/YYYY"
+// ─────────────────────────────────────────────
+const MES_NUM_MAP = {
+  '01':'ene','02':'feb','03':'mar','04':'abr','05':'may','06':'jun',
+  '07':'jul','08':'ago','09':'sep','10':'oct','11':'nov','12':'dic',
+}
+
+export async function fetchDatosLooker(tabName = TAB_DATOS_LOOKER) {
+  const rows = await getRange(LOOKER_SHEET_ID, tabName)
+  if (!rows.length) return []
+
+  const objects = rowsToObjects(rows)
+
+  return objects.map(obj => {
+    const periodo = find(obj, ['Periodo', 'periodo', 'Period'])
+    if (!periodo || !periodo.includes('/')) return null
+
+    const [mm, yyyy] = periodo.split('/')
+    const mes = `${MES_NUM_MAP[mm] || mm} ${yyyy.slice(-2)}`
+
+    return {
+      periodo,
+      mes,
+      ebitda:           num(find(obj, ['E300 - Operating Income (EBITDA)', 'E300'])),
+      totalCosts:       num(find(obj, ['OC200 - Total Operating Costs', 'OC200'])),
+      sueldosFreelance: num(find(obj, ['OC2011 - Sueldos y Freelances', 'OC2011'])),
+      serviciosOp:      num(find(obj, ['OC2012 - Servicios Operativos', 'OC2012'])),
+      serviciosFun:     num(find(obj, ['OC2013 - Servicios Funcionales', 'OC2013'])),
+      impuestos:        num(find(obj, ['OC2015 - Impuestos y Bancarios', 'OC2015'])),
+      revenue:          num(find(obj, ['RV100 - Revenue', 'RV100'])),
+      ebitdaHistory:    num(find(obj, ['EBITDA History'])),
+      revenueHistory:   num(find(obj, ['Revenue History'])),
+      payroll:          num(find(obj, ['Payroll', 'payroll'])),
+      distribuible:     num(find(obj, ['Distribuible', 'distribuible'])),
+      margen:           num(find(obj, ['Margen', 'margen'])),
+      estructura:       num(find(obj, ['Estructura', 'estructura'])) * 1000,
+    }
+  }).filter(Boolean).sort((a, b) => {
+    const [am, ay] = a.periodo.split('/')
+    const [bm, by] = b.periodo.split('/')
+    return (parseInt(ay) * 12 + parseInt(am)) - (parseInt(by) * 12 + parseInt(bm))
+  })
 }

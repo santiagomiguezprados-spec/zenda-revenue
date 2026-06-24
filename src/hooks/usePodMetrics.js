@@ -9,6 +9,7 @@
 import { useMemo } from 'react'
 import usePodDesignStore from '../store/usePodDesignStore'
 import useDataStore from '../store/useDataStore'
+import { usePeriodValues } from './useGlobalPeriod'
 
 export function usePodMetrics() {
   const pods = usePodDesignStore(s => s.pods)
@@ -18,9 +19,11 @@ export function usePodMetrics() {
   const overheadManual = usePodDesignStore(s => s.overheadManual)
 
   // Overhead dinamico desde datos live
-  const teamData = useDataStore(s => s.teamData)
+  const teamData   = useDataStore(s => s.teamData)
+  const lookerData = useDataStore(s => s.lookerData)
   const rate = useDataStore(s => s.rate)
 
+  // Todos los 6 C-Level (detectados por apellido en sheetsService)
   const overheadFromSheet = useMemo(() => {
     if (!teamData || !rate) return 0
     return Math.round(
@@ -30,8 +33,48 @@ export function usePodMetrics() {
     )
   }, [teamData, rate])
 
-  // Overhead efectivo: manual override > sheet > fallback
-  const overheadUSD = overheadManual !== null ? overheadManual : overheadFromSheet
+  // Fracción de C-Level operativos ya asignada a PODs — se resta para evitar doble conteo
+  const allocatedCLevelOpCost = useMemo(() => {
+    if (!teamData || !rate) return 0
+    const opCosts = {}
+    teamData
+      .filter(p => p.cLevelOperativo)
+      .forEach(p => { opCosts[p.nombre] = Math.round((p.costoMensualARS || p.neto || 0) / rate) })
+
+    let total = 0
+    Object.values(assignments).forEach(members =>
+      members.forEach(m => {
+        if (opCosts[m.nombre] != null)
+          total += (m.costoUSD ?? opCosts[m.nombre]) * m.allocation / 100
+      })
+    )
+    return Math.round(total)
+  }, [teamData, rate, assignments])
+
+  const { selectedMonths } = usePeriodValues()
+
+  // Estructura: valor del período seleccionado (promedio mensual)
+  const estructuraUSD = useMemo(() => {
+    if (!lookerData?.length) return 0
+    if (selectedMonths?.length > 0) {
+      const targetMeses = new Set(selectedMonths.map(m => m.replace('-', ' ')))
+      const matching = lookerData.filter(d => targetMeses.has(d.mes))
+      if (matching.length > 0) {
+        return matching.reduce((s, d) => s + Math.abs(d.estructura || 0), 0) / matching.length
+      }
+    }
+    return Math.abs(lookerData[lookerData.length - 1]?.estructura || 0)
+  }, [lookerData, selectedMonths])
+
+  // Overhead payroll efectivo:
+  // - Sheet detecta los 6 (overheadFromSheet > 0): computed − fracción asignada a PODs
+  // - Sheet aún no cargó (overheadFromSheet = 0): usa override manual como fallback
+  const overheadPayroll = overheadFromSheet > 0
+    ? Math.max(0, overheadFromSheet - allocatedCLevelOpCost)
+    : (overheadManual ?? 0)
+
+  // Overhead total = payroll efectivo + estructura
+  const overheadUSD = overheadPayroll + estructuraUSD
 
   const podMetrics = useMemo(() => {
     const effectiveOverhead = overheadUSD || 0
@@ -134,5 +177,5 @@ export function usePodMetrics() {
     [podMetrics]
   )
 
-  return { podMetrics, globalMetrics, hasDesign, resumenFromDesign, overheadUSD, overheadFromSheet, overheadManual }
+  return { podMetrics, globalMetrics, hasDesign, resumenFromDesign, overheadUSD, overheadPayroll, overheadFromSheet, estructuraUSD, overheadManual }
 }

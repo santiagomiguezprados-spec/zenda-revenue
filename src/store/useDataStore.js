@@ -9,10 +9,13 @@
 import { create } from 'zustand'
 import {
   isConfigured,
+  isLookerConfigured,
   fetchTeamCostoNormalizado,
   fetchVentasDolarizadas,
+  fetchDatosLooker,
   TAB_TEAM,
   TAB_VENTAS,
+  TAB_DATOS_LOOKER,
 } from '../services/sheetsService'
 import {
   fetchDolarBlue,
@@ -20,6 +23,7 @@ import {
   setCachedRate,
   clearRateCache,
 } from '../services/exchangeRate'
+import { supabase } from '../lib/supabase'
 import localTeam from '../data/team_cost.json'
 
 // ── Constantes ───────────────────────────────────────────────────────────────
@@ -55,6 +59,13 @@ const useDataStore = create((set, get) => ({
   ventasLoading: false,
   ventasError: null,
   ventasLastFetch: null,
+
+  // ── Datos Looker (P&L mensual) ────────────────────────────────────────────
+  lookerData: null,
+  lookerSource: 'local',
+  lookerLoading: false,
+  lookerError: null,
+  lookerLastFetch: null,
 
   // ── Tipo de Cambio ────────────────────────────────────────────────────────
   rate: RATE_FALLBACK,
@@ -100,6 +111,37 @@ const useDataStore = create((set, get) => ({
     }
   },
 
+  // ── Fetch: Datos Looker ───────────────────────────────────────────────────
+  // Camino 1: Google Sheets directo con API key (sheet público).
+  // Camino 2: Supabase Edge Function como fallback (sheet privado).
+  fetchLooker: async () => {
+    set({ lookerLoading: true, lookerError: null })
+    try {
+      if (isLookerConfigured()) {
+        try {
+          const data = await fetchDatosLooker(TAB_DATOS_LOOKER)
+          if (data && data.length > 0) {
+            set({ lookerData: data, lookerSource: 'sheets', lookerLastFetch: Date.now() })
+            return
+          }
+        } catch {
+          // Sheet privado o API key sin acceso — intenta Edge Function
+        }
+      }
+      if (supabase) {
+        const { data, error } = await supabase.functions.invoke('datos-looker')
+        if (error) throw error
+        if (data && Array.isArray(data) && data.length > 0) {
+          set({ lookerData: data, lookerSource: 'sheets', lookerLastFetch: Date.now() })
+        }
+      }
+    } catch (err) {
+      set({ lookerError: err.message })
+    } finally {
+      set({ lookerLoading: false })
+    }
+  },
+
   // ── Fetch: Exchange Rate ──────────────────────────────────────────────────
   fetchRate: async (force = false) => {
     if (force) clearRateCache()
@@ -122,17 +164,16 @@ const useDataStore = create((set, get) => ({
 
   // ── Refresh All ───────────────────────────────────────────────────────────
   refreshAll: async () => {
-    const { fetchTeam, fetchVentas, fetchRate } = get()
-    await Promise.allSettled([fetchTeam(), fetchVentas(), fetchRate(true)])
+    const { fetchTeam, fetchVentas, fetchRate, fetchLooker } = get()
+    await Promise.allSettled([fetchTeam(), fetchVentas(), fetchRate(true), fetchLooker()])
   },
 
   // ── Initialize (called once from Layout) ──────────────────────────────────
   initialize: async () => {
     if (get()._initialized) return
     set({ _initialized: true })
-    const { fetchTeam, fetchVentas, fetchRate, startAutoRefresh } = get()
-    // Fetch in parallel on first load
-    await Promise.allSettled([fetchTeam(), fetchVentas(), fetchRate()])
+    const { fetchTeam, fetchVentas, fetchRate, fetchLooker, startAutoRefresh } = get()
+    await Promise.allSettled([fetchTeam(), fetchVentas(), fetchRate(), fetchLooker()])
     startAutoRefresh()
   },
 
@@ -196,12 +237,12 @@ const useDataStore = create((set, get) => ({
     return ventasData.reduce((sum, c) => sum + (c.ventaMensual?.[month] || 0), 0)
   },
 
-  /** Pool de equipo operativo (sin overhead) con costo USD */
+  /** Pool de equipo operativo + C-Level operativos (asignables a PODs) */
   getTeamPool: () => {
     const { teamData, rate } = get()
     if (!teamData) return []
     return teamData
-      .filter(p => !p.esOverhead)
+      .filter(p => !p.esOverhead || p.cLevelOperativo)
       .map(p => ({
         ...p,
         costoUSD: Math.round((p.costoMensualARS || p.neto || 0) / rate),
@@ -225,15 +266,16 @@ const useDataStore = create((set, get) => ({
 
   /** Indica si hay datos live (no solo locales) */
   isLive: () => {
-    const { teamSource, ventasSource } = get()
-    return teamSource === 'sheets' || ventasSource === 'sheets'
+    const { teamSource, ventasSource, lookerSource } = get()
+    return teamSource === 'sheets' || ventasSource === 'sheets' || lookerSource === 'sheets'
   },
 
   /** Indica si hay algún error activo */
   hasErrors: () => {
-    const { teamError, ventasError, rateError } = get()
-    return !!(teamError || ventasError || rateError)
+    const { teamError, ventasError, rateError, lookerError } = get()
+    return !!(teamError || ventasError || rateError || lookerError)
   },
+
 }))
 
 export default useDataStore

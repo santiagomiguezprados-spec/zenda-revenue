@@ -57,9 +57,9 @@ export default function useDataOrchestrator() {
     if (teamSource !== 'sheets' && ventasSource !== 'sheets') return
     if (!teamData || !rate) return
 
-    // Build team pool (operativo, sin overhead)
+    // Build team pool: operativos + C-Level operativos (asignables a PODs)
     const teamPool = teamData
-      .filter(p => !p.esOverhead)
+      .filter(p => !p.esOverhead || p.cLevelOperativo)
       .map(p => ({
         nombre: p.nombre,
         costoUSD: Math.round((p.costoMensualARS || p.neto || 0) / rate),
