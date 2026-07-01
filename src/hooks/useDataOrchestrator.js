@@ -76,14 +76,22 @@ export default function useDataOrchestrator() {
         if (snap.pod_design) {
           restoreConfig(snap.pod_design)
         }
-        // Reconstituir teamData desde el snapshot de costos
+        // Reconstituir teamData desde el snapshot de costos.
+        // Se recuperan los flags esOverhead/cLevelOperativo desde teamMensualData
+        // para que overhead y pool de PODs funcionen correctamente en el período cerrado.
         const teamCostsSnap = snap.team_costs || {}
         const rate = snap.rate || useDataStore.getState().rate
-        const derivedTeam = Object.entries(teamCostsSnap).map(([nombre, costoARS]) => ({
-          nombre,
-          costoMensualARS: costoARS,
-          neto: costoARS,
-        }))
+        const mensual = useDataStore.getState().teamMensualData || []
+        const derivedTeam = Object.entries(teamCostsSnap).map(([nombre, costoARS]) => {
+          const ref = mensual.find(p => p.nombre === nombre)
+          return {
+            nombre,
+            costoMensualARS: costoARS,
+            neto: costoARS,
+            ...(ref?.esOverhead     && { esOverhead: true, categoria: ref.categoria }),
+            ...(ref?.cLevelOperativo && { cLevelOperativo: true }),
+          }
+        })
         if (derivedTeam.length > 0) {
           useDataStore.setState({ teamData: derivedTeam, teamSource: 'snapshot' })
         }
@@ -100,10 +108,10 @@ export default function useDataOrchestrator() {
   }, [ventasData, setAvailableMonths])
 
   // 2. Sync POD design store whenever data or selected period changes.
-  // Guard: no sincronizar mientras los datos están cargando — evita marcar
-  // asignaciones como _orphaned por un pool vacío o incompleto.
+  // Guards: no sincronizar durante loading ni en períodos cerrados (snapshot inmutable).
   useEffect(() => {
     if (teamSource !== 'sheets' && ventasSource !== 'sheets') return
+    if (teamSource === 'snapshot') return  // período cerrado: asignaciones son inmutables
     if (!teamData || !rate) return
     if (teamLoading || teamMensualLoading || ventasLoading) return
 
