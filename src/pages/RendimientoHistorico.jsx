@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { listPeriodos, loadClosedPeriod } from '../services/periodCloseService'
 import { formatUSD, formatPct } from '../utils/formatters'
 
@@ -9,8 +9,13 @@ function Semaforo({ pct }) {
 }
 
 export default function RendimientoHistorico() {
-  const [meses, setMeses]   = useState([])
+  const [meses, setMeses]     = useState([])
   const [loading, setLoading] = useState(true)
+  const [collapsed, setCollapsed] = useState({})
+
+  const toggle = useCallback(codigo =>
+    setCollapsed(prev => ({ ...prev, [codigo]: !prev[codigo] })),
+  [])
 
   useEffect(() => {
     async function load() {
@@ -60,8 +65,20 @@ export default function RendimientoHistorico() {
           <div key={codigo} className="bg-white rounded-2xl shadow-sm overflow-hidden">
 
             {/* Cabecera del mes */}
-            <div className="px-5 py-3 flex items-center justify-between border-b border-gray-100">
+            <button
+              onClick={() => toggle(codigo)}
+              className="w-full px-5 py-3 flex items-center justify-between hover:bg-gray-50/60 transition-colors"
+              style={{ borderBottom: collapsed[codigo] ? 'none' : '1px solid #f3f4f6' }}
+            >
               <div className="flex items-center gap-3">
+                <svg
+                  width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  viewBox="0 0 24 24"
+                  className="text-textSecondary flex-shrink-0 transition-transform duration-200"
+                  style={{ transform: collapsed[codigo] ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
                 <span className="text-sm font-bold text-textPrimary">{label}</span>
                 <span className="text-xs text-textSecondary">{activePods.length} PODs</span>
               </div>
@@ -80,10 +97,9 @@ export default function RendimientoHistorico() {
                   </span>
                 </span>
               </div>
-            </div>
+            </button>
 
-            {/* Tabla PODs */}
-            <table className="w-full">
+            {!collapsed[codigo] && <table className="w-full">
               <thead>
                 <tr>
                   <th className="text-left text-[10px] font-semibold text-textSecondary uppercase tracking-wide px-5 py-2">POD</th>
@@ -142,7 +158,7 @@ export default function RendimientoHistorico() {
                   </td>
                 </tr>
               </tbody>
-            </table>
+            </table>}
           </div>
         )
       })}
