@@ -31,6 +31,9 @@ export default function useDataOrchestrator() {
   const loadFromSupabase   = usePodDesignStore(s => s.loadFromSupabase)
   const restoreConfig      = usePodDesignStore(s => s.restoreConfig)
   const selectedMonth      = useGlobalPeriod(s => s.selectedMonth)
+  const selectedQuarter    = useGlobalPeriod(s => s.selectedQuarter)
+  const selectedYear       = useGlobalPeriod(s => s.selectedYear)
+  const mode               = useGlobalPeriod(s => s.mode)
   const setAvailableMonths = useGlobalPeriod(s => s.setAvailableMonths)
   const closedPeriods      = useGlobalPeriod(s => s.closedPeriods)
   const setClosedPeriods   = useGlobalPeriod(s => s.setClosedPeriods)
@@ -124,19 +127,25 @@ export default function useDataOrchestrator() {
 
     if (teamPool.length === 0) return
 
+    // Revenue mensual promedio para que costMultiplier lo escale correctamente en cada vista
+    const months = useGlobalPeriod.getState().getSelectedMonths()
     let clientPool = []
-    if (ventasData && selectedMonth) {
+    if (ventasData && months.length > 0) {
       clientPool = ventasData
-        .map(c => ({
-          nombre: c.nombre,
-          tipo: c.tipo,
-          revenue: c.ventaMensual?.[selectedMonth] || 0,
-        }))
+        .map(c => {
+          const total = months.reduce((s, m) => s + (c.ventaMensual?.[m] || 0), 0)
+          return {
+            nombre: c.nombre,
+            tipo: c.tipo,
+            revenue: Math.round(total / months.length),
+          }
+        })
         .filter(c => c.revenue > 0)
     }
 
     syncWithLiveData(teamPool, clientPool)
-  }, [teamData, ventasData, rate, teamSource, ventasSource, syncWithLiveData, selectedMonth,
+  }, [teamData, ventasData, rate, teamSource, ventasSource, syncWithLiveData,
+      selectedMonth, selectedQuarter, selectedYear, mode,
       teamLoading, teamMensualLoading, ventasLoading])
 
   // Cleanup auto-refresh on unmount

@@ -29,22 +29,32 @@ export default function Equipo() {
   const [newNeto, setNewNeto]               = useState('')
   const [overheadOverrides, setOverheadOverrides] = useState(new Set())
 
-  const { selectedMonth } = usePeriodValues()
+  const { selectedMonth, selectedMonths, costMultiplier, periodLabel } = usePeriodValues()
 
   const effectiveTC = simMode ? tc : liveRate
 
-  // Estructura del período global seleccionado (d.mes = "jul 26", selectedMonth = "jul-26")
+  // Para el label del mes en la card de estructura (siempre el mes puntual)
   const currentLooker = useMemo(() => {
     if (!lookerData?.length) return null
     if (selectedMonth) {
-      const targetMes = selectedMonth.replace('-', ' ')
-      const found = lookerData.find(d => d.mes === targetMes)
+      const found = lookerData.find(d => d.mes === selectedMonth.replace('-', ' '))
       if (found) return found
     }
     return lookerData[lookerData.length - 1]
   }, [lookerData, selectedMonth])
 
-  const estructuraUSD = currentLooker?.estructura != null ? Math.abs(currentLooker.estructura) : null
+  // Estructura promedio mensual del período seleccionado
+  const estructuraUSD = useMemo(() => {
+    if (!lookerData?.length) return null
+    if (selectedMonths?.length > 0) {
+      const targets = new Set(selectedMonths.map(m => m.replace('-', ' ')))
+      const matching = lookerData.filter(d => targets.has(d.mes))
+      if (matching.length > 0)
+        return matching.reduce((s, d) => s + Math.abs(d.estructura || 0), 0) / matching.length
+    }
+    if (currentLooker?.estructura != null) return Math.abs(currentLooker.estructura)
+    return null
+  }, [lookerData, selectedMonths, currentLooker])
 
   // ── Separación equipo / overhead considerando asignaciones manuales ──────────
   // esOverhead viene del sheet (sheetsService detecta los 6 por apellido)
@@ -105,13 +115,19 @@ export default function Equipo() {
     [overhead, effectiveTC]
   )
 
-  const totalUSD         = useMemo(() => equipoEfectivo.reduce((s, p) => s + p.costoUSD, 0), [equipoEfectivo])
+  const totalUSDMensual  = useMemo(() => equipoEfectivo.reduce((s, p) => s + p.costoUSD, 0), [equipoEfectivo])
   const totalUSDBase     = useMemo(() => equipo.reduce((s, p) => s + Math.round((p.costoMensualARS || p.neto) / liveRate), 0), [equipo, liveRate])
   const totalOverheadUSD = useMemo(() => overheadEfectivo.reduce((s, p) => s + p.costoUSD, 0), [overheadEfectivo])
-  const totalOverheadCompleto = totalOverheadUSD + (estructuraUSD || 0)
   const headcount        = equipo.length + newPeople.length
-  const promedio         = headcount ? Math.round(totalUSD / headcount) : 0
-  const deltaTotal       = simMode ? totalUSD - totalUSDBase : 0
+  const promedio         = headcount ? Math.round(totalUSDMensual / headcount) : 0
+
+  // Totales del período (mensual × costMultiplier)
+  const totalUSD              = totalUSDMensual * costMultiplier
+  const totalOverheadPeriodo  = totalOverheadUSD * costMultiplier
+  const totalOverheadCompleto = totalOverheadPeriodo + (estructuraUSD || 0) * costMultiplier
+  const deltaTotal            = simMode ? totalUSD - totalUSDBase * costMultiplier : 0
+
+  const periodoSuffix = costMultiplier === 1 ? '/mes' : ` · ${periodLabel}`
 
   const chartData = useMemo(() =>
     [...equipoEfectivo].sort((a, b) => b.costoUSD - a.costoUSD),
@@ -343,9 +359,9 @@ export default function Equipo() {
 
             {deltaTotal !== 0 && (
               <div className="bg-white rounded-xl border border-gray-200 px-4 py-2">
-                <p className="text-xs text-textSecondary">Impacto mensual equipo</p>
+                <p className="text-xs text-textSecondary">Impacto equipo{periodoSuffix}</p>
                 <p className={`text-sm font-bold ${deltaTotal < 0 ? 'text-success' : 'text-danger'}`}>
-                  {deltaTotal > 0 ? '+' : ''}{formatUSD(deltaTotal)}/mes
+                  {deltaTotal > 0 ? '+' : ''}{formatUSD(deltaTotal)}
                 </p>
               </div>
             )}
@@ -412,28 +428,28 @@ export default function Equipo() {
           value={formatUSD(totalUSD)}
           color="default"
           icon="💰"
-          subtitle={`USD @${effectiveTC.toLocaleString('es-AR')}/mes`}
+          subtitle={`USD @${effectiveTC.toLocaleString('es-AR')}${periodoSuffix}`}
         />
         <KPICard
           title="Promedio por Persona"
           value={formatUSD(promedio)}
           color="success"
           icon="📊"
-          subtitle="USD/mes"
+          subtitle="USD/mes (por persona)"
         />
         <KPICard
           title="Overhead C-Level"
-          value={formatUSD(totalOverheadUSD)}
+          value={formatUSD(totalOverheadPeriodo)}
           color="warning"
           icon="🏢"
-          subtitle={overheadOverrides.size ? `${overheadEfectivo.length} personas (${overheadOverrides.size} manual)` : 'C-Level + Ops'}
+          subtitle={overheadOverrides.size ? `${overheadEfectivo.length} personas (${overheadOverrides.size} manual)` : `C-Level${periodoSuffix}`}
         />
         <KPICard
           title="Estructura"
-          value={estructuraUSD !== null ? formatUSD(estructuraUSD) : '—'}
+          value={estructuraUSD !== null ? formatUSD(estructuraUSD * costMultiplier) : '—'}
           color="default"
           icon="🏗️"
-          subtitle={currentLooker ? `Looker · ${currentLooker.mes}` : 'Sin datos Looker'}
+          subtitle={currentLooker ? `Looker${periodoSuffix}` : 'Sin datos Looker'}
         />
       </div>
 
@@ -473,7 +489,7 @@ export default function Equipo() {
               Total Overhead{estructuraUSD !== null ? ' (C-Level + Estructura)' : ''}
             </span>
             <span className="text-sm font-bold text-warning">
-              {formatUSD(estructuraUSD !== null ? totalOverheadCompleto : totalOverheadUSD)}/mes
+              {formatUSD(estructuraUSD !== null ? totalOverheadCompleto : totalOverheadPeriodo)}{periodoSuffix}
             </span>
           </div>
         </div>
@@ -491,7 +507,7 @@ export default function Equipo() {
         />
         <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
           <span className="text-xs font-semibold text-textSecondary">
-            Total ({headcount} personas)
+            Total ({headcount} personas · {formatUSD(totalUSDMensual)}/mes)
           </span>
           <div className="flex items-center gap-3">
             {simMode && deltaTotal !== 0 && (
@@ -499,7 +515,7 @@ export default function Equipo() {
                 {deltaTotal > 0 ? '+' : ''}{formatUSD(deltaTotal)}
               </span>
             )}
-            <span className="text-sm font-bold text-primary">{formatUSD(totalUSD)}/mes</span>
+            <span className="text-sm font-bold text-primary">{formatUSD(totalUSD)}{periodoSuffix}</span>
           </div>
         </div>
       </div>
