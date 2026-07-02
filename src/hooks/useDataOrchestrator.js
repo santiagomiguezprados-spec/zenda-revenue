@@ -10,6 +10,7 @@
 import { useEffect } from 'react'
 import useDataStore from '../store/useDataStore'
 import usePodDesignStore from '../store/usePodDesignStore'
+import useOrgChartStore from '../store/useOrgChartStore'
 import useGlobalPeriod from './useGlobalPeriod'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { listPeriodos, loadClosedPeriod } from '../services/periodCloseService'
@@ -30,6 +31,9 @@ export default function useDataOrchestrator() {
   const syncWithLiveData   = usePodDesignStore(s => s.syncWithLiveData)
   const loadFromSupabase   = usePodDesignStore(s => s.loadFromSupabase)
   const restoreConfig      = usePodDesignStore(s => s.restoreConfig)
+  const loadOrgFromSupabase = useOrgChartStore(s => s.loadFromSupabase)
+  const restoreOrgSnapshot  = useOrgChartStore(s => s.restoreSnapshot)
+  const setOrgLive          = useOrgChartStore(s => s.setLive)
   const selectedMonth      = useGlobalPeriod(s => s.selectedMonth)
   const selectedQuarter    = useGlobalPeriod(s => s.selectedQuarter)
   const selectedYear       = useGlobalPeriod(s => s.selectedYear)
@@ -55,8 +59,9 @@ export default function useDataOrchestrator() {
   useEffect(() => {
     if (isSupabaseConfigured) {
       loadFromSupabase()
+      loadOrgFromSupabase()
     }
-  }, [loadFromSupabase])
+  }, [loadFromSupabase, loadOrgFromSupabase])
 
   // 1e. Cargar estado de períodos cerrados desde Supabase
   useEffect(() => {
@@ -70,7 +75,12 @@ export default function useDataOrchestrator() {
   useEffect(() => {
     if (!selectedMonth || !isSupabaseConfigured) return
     const closed = closedPeriods[selectedMonth]
-    if (!closed) return
+    if (!closed) {
+      // Período abierto: si el organigrama estaba mostrando un snapshot
+      // congelado, volver a modo live (recarga desde org_charts 'current').
+      setOrgLive()
+      return
+    }
 
     loadClosedPeriod(closed.id)
       .then(snap => {
@@ -78,6 +88,11 @@ export default function useDataOrchestrator() {
         // Restaurar el diseño de PODs del snapshot
         if (snap.pod_design) {
           restoreConfig(snap.pod_design)
+        }
+        // Restaurar el organigrama (jerarquía + posiciones) del mismo snapshot,
+        // en modo solo-lectura — no dispara auto-save.
+        if (snap.org_chart) {
+          restoreOrgSnapshot(snap.org_chart)
         }
         // Reconstituir teamData desde el snapshot de costos.
         // Se recuperan los flags esOverhead/cLevelOperativo desde teamMensualData
@@ -100,7 +115,7 @@ export default function useDataOrchestrator() {
         }
       })
       .catch(() => {})
-  }, [selectedMonth, closedPeriods, restoreConfig])
+  }, [selectedMonth, closedPeriods, restoreConfig, restoreOrgSnapshot, setOrgLive])
 
   // 1b. Feed available months to period store
   useEffect(() => {

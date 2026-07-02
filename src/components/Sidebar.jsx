@@ -30,6 +30,20 @@ const nav = [
     ),
   },
   {
+    to: '/organigrama', label: 'Organigrama', roles: ['admin', 'hr'], icon: (
+      <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <rect x="9" y="2" width="6" height="4" rx="1"/>
+        <path d="M12 6v4"/>
+        <path d="M5 14h14"/>
+        <path d="M5 10v4"/><path d="M19 10v4"/>
+        <rect x="2" y="18" width="6" height="4" rx="1"/>
+        <rect x="9" y="18" width="6" height="4" rx="1"/>
+        <rect x="16" y="18" width="6" height="4" rx="1"/>
+        <path d="M5 14v4"/><path d="M12 14v4"/><path d="M19 14v4"/>
+      </svg>
+    ),
+  },
+  {
     to: '/clientes', label: 'Clientes', roles: ['admin'], icon: (
       <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>

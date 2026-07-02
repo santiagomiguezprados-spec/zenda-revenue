@@ -8,6 +8,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTeamCostoNormalizadoData, useVentasDolarizadasData } from '../hooks/useSheetData'
 import useExchangeRate from '../hooks/useExchangeRate'
 import usePodDesignStore from '../store/usePodDesignStore'
+import useOrgChartStore from '../store/useOrgChartStore'
 import { usePodMetrics } from '../hooks/usePodMetrics'
 import { formatUSD, formatPct } from '../utils/formatters'
 import { POD_COLORS } from '../utils/podColors'
@@ -409,6 +410,8 @@ export default function PodDesigner() {
       const lookerRow = lookerData?.find(d => d.mes === selectedMonth.replace('-', ' ')) || {}
       const estructuraUsdSnap = Math.abs(lookerRow.estructura || 0)
 
+      const { roleLevels, reportingTo, positions, personClientAssignments } = useOrgChartStore.getState()
+
       const snapshot = {
         podDesign: { pods, assignments, clientAssignments, revenueOverrides, overheadShareOverrides },
         teamCosts,
@@ -417,6 +420,7 @@ export default function PodDesigner() {
         estructuraUsd: estructuraUsdSnap,
         rate:          useDataStore.getState().rate,
         metrics:       { podMetrics, globalMetrics },
+        orgChart:      { roleLevels, reportingTo, positions, personClientAssignments },
       }
 
       await closePeriod(periodo.id, snapshot, userId)

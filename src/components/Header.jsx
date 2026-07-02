@@ -5,6 +5,7 @@ const titles = {
   '/': 'Dashboard General',
   '/pods': 'Vista por POD',
   '/pod-designer': 'Diseñador de PODs',
+  '/organigrama': 'Organigrama',
   '/clientes': 'Clientes',
   '/equipo': 'Equipo y Costos',
   '/rentabilidad': 'Rentabilidad',

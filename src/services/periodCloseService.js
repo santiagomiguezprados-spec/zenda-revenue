@@ -28,13 +28,13 @@ export async function loadClosedPeriod(periodoId) {
 /**
  * Cierra un período guardando el snapshot completo.
  * @param {string} periodoId  — UUID del período
- * @param {object} snapshot   — { podDesign, teamCosts, revenue, overheadUsd, estructuraUsd, rate, metrics }
+ * @param {object} snapshot   — { podDesign, teamCosts, revenue, overheadUsd, estructuraUsd, rate, metrics, orgChart }
  * @param {string} userId     — UUID del usuario que cierra
  */
 export async function closePeriod(periodoId, snapshot, userId) {
   const {
     podDesign, teamCosts, revenue,
-    overheadUsd, estructuraUsd, rate, metrics,
+    overheadUsd, estructuraUsd, rate, metrics, orgChart,
   } = snapshot
 
   // Upsert snapshot (por si ya existe uno previo — reclose)
@@ -49,6 +49,7 @@ export async function closePeriod(periodoId, snapshot, userId) {
       estructura_usd: estructuraUsd,
       rate,
       metrics,
+      org_chart:      orgChart || {},
       closed_by:      userId,
       closed_at:      new Date().toISOString(),
       reopened_at:    null,
