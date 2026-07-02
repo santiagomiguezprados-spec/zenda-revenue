@@ -137,6 +137,10 @@ export default function PodDesigner() {
   }, [ventasData, selectedMonth])
 
   // ── Estado local UI ────────────────────────────────────────────────────────
+  const [collapsedPods, setCollapsedPods] = useState({})
+  const toggleCollapsePod = useCallback(podId =>
+    setCollapsedPods(prev => ({ ...prev, [podId]: !prev[podId] })),
+  [])
   const [poolTab, setPoolTab] = useState('equipo')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState([])   // Array para multi-select
@@ -887,6 +891,17 @@ export default function PodDesigner() {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {!isHR && <span className="text-lg">{semaforo(pod.marginPct)}</span>}
+                    <button
+                      onClick={e => { e.stopPropagation(); toggleCollapsePod(pod.id) }}
+                      className="text-gray-400 hover:text-textPrimary transition-colors p-0.5"
+                      title={collapsedPods[pod.id] ? 'Expandir POD' : 'Colapsar POD'}>
+                      <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5"
+                        viewBox="0 0 24 24"
+                        className="transition-transform duration-200"
+                        style={{ transform: collapsedPods[pod.id] ? 'rotate(-90deg)' : 'rotate(0deg)' }}>
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
                     {isDeleting ? (
                       <div className="flex items-center gap-1 ml-1" onClick={e => e.stopPropagation()}>
                         <button onClick={() => handleDeletePod(pod.id)}
@@ -903,7 +918,7 @@ export default function PodDesigner() {
                   </div>
                 </div>
 
-                <div className="p-4 space-y-3">
+                {!collapsedPods[pod.id] && <div className="p-4 space-y-3">
                   {/* Revenue — solo admin */}
                   {!isHR && (
                   <div className="flex items-center gap-2">
@@ -1129,7 +1144,7 @@ export default function PodDesigner() {
                       </div>
                     </div>
                   )}
-                </div>
+                </div>}
               </div>
             )
           })}

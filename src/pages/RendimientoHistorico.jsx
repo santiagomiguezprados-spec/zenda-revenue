@@ -38,10 +38,12 @@ function Semaforo({ pct }) {
 export default function RendimientoHistorico() {
   const [meses, setMeses]     = useState([])
   const [loading, setLoading] = useState(true)
+  // Colapsado por default: un mes solo queda expandido si está explícitamente en false
   const [collapsed, setCollapsed] = useState({})
+  const isCollapsed = useCallback(codigo => collapsed[codigo] !== false, [collapsed])
 
   const toggle = useCallback(codigo =>
-    setCollapsed(prev => ({ ...prev, [codigo]: !prev[codigo] })),
+    setCollapsed(prev => ({ ...prev, [codigo]: prev[codigo] === false ? true : false })),
   [])
 
   useEffect(() => {
@@ -168,14 +170,14 @@ export default function RendimientoHistorico() {
             <button
               onClick={() => toggle(codigo)}
               className="w-full px-5 py-3 flex items-center justify-between hover:bg-gray-50/60 transition-colors"
-              style={{ borderBottom: collapsed[codigo] ? 'none' : '1px solid #f3f4f6' }}
+              style={{ borderBottom: isCollapsed(codigo) ? 'none' : '1px solid #f3f4f6' }}
             >
               <div className="flex items-center gap-3">
                 <svg
                   width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5"
                   viewBox="0 0 24 24"
                   className="text-textSecondary flex-shrink-0 transition-transform duration-200"
-                  style={{ transform: collapsed[codigo] ? 'rotate(-90deg)' : 'rotate(0deg)' }}
+                  style={{ transform: isCollapsed(codigo) ? 'rotate(-90deg)' : 'rotate(0deg)' }}
                 >
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
@@ -205,7 +207,7 @@ export default function RendimientoHistorico() {
               </div>
             </button>
 
-            {!collapsed[codigo] && <table className="w-full">
+            {!isCollapsed(codigo) && <table className="w-full">
               <thead>
                 <tr>
                   <th className="text-left text-[10px] font-semibold text-textSecondary uppercase tracking-wide px-5 py-2">POD</th>
