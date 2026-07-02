@@ -16,6 +16,7 @@ export function usePodMetrics() {
   const assignments = usePodDesignStore(s => s.assignments)
   const clientAssignments = usePodDesignStore(s => s.clientAssignments)
   const revenueOverrides = usePodDesignStore(s => s.revenueOverrides)
+  const overheadShareOverrides = usePodDesignStore(s => s.overheadShareOverrides)
   const overheadManual = usePodDesignStore(s => s.overheadManual)
 
   // Overhead dinamico desde datos live
@@ -83,7 +84,23 @@ export function usePodMetrics() {
       if (revenueOverrides[pod.id] !== undefined) return revenueOverrides[pod.id]
       return (clientAssignments[pod.id] || []).reduce((s, c) => s + c.revenue, 0)
     })
-    const totalRevenue = allRevenues.reduce((s, v) => s + v, 0)
+
+    // Pool de % de overhead: los PODs con override manual se quedan con ese %,
+    // el resto del pool (100% - overrideado) se reparte proporcional a revenue
+    // entre los PODs sin override — mismo criterio que la dedicación de miembros.
+    const overriddenPct = Math.min(
+      100,
+      pods.reduce((s, pod) => s + (overheadShareOverrides[pod.id] ?? 0), 0)
+    )
+    const remainingPool = Math.max(0, 100 - overriddenPct)
+    let remainingRevenue = 0
+    let remainingPodCount = 0
+    pods.forEach((pod, i) => {
+      if (overheadShareOverrides[pod.id] === undefined) {
+        remainingRevenue += allRevenues[i]
+        remainingPodCount += 1
+      }
+    })
 
     return pods.map((pod, i) => {
       const members = assignments[pod.id] || []
@@ -93,9 +110,15 @@ export function usePodMetrics() {
       const teamCost = members.reduce((s, m) => s + (m.costoUSD * m.allocation / 100), 0)
       const gop = revenue - teamCost
       const gopPct = revenue ? (gop / revenue) * 100 : 0
-      const overheadShare = totalRevenue
-        ? (revenue / totalRevenue) * effectiveOverhead
-        : pods.length ? effectiveOverhead / pods.length : 0
+
+      const hasOverheadOverride = overheadShareOverrides[pod.id] !== undefined
+      const overheadPct = hasOverheadOverride
+        ? overheadShareOverrides[pod.id]
+        : remainingRevenue
+          ? remainingPool * (revenue / remainingRevenue)
+          : (remainingPodCount ? remainingPool / remainingPodCount : 0)
+      const overheadShare = (overheadPct / 100) * effectiveOverhead
+
       const margin = gop - overheadShare
       const marginPct = revenue ? (margin / revenue) * 100 : 0
 
@@ -107,6 +130,8 @@ export function usePodMetrics() {
         gop: Math.round(gop),
         gopPct: Math.round(gopPct * 10) / 10,
         overhead: Math.round(overheadShare),
+        overheadPct: Math.round(overheadPct * 10) / 10,
+        hasOverheadOverride,
         margin: Math.round(margin),
         marginPct: Math.round(marginPct * 10) / 10,
         members,
@@ -136,7 +161,7 @@ export function usePodMetrics() {
         })),
       }
     })
-  }, [pods, assignments, clientAssignments, revenueOverrides, overheadUSD])
+  }, [pods, assignments, clientAssignments, revenueOverrides, overheadShareOverrides, overheadUSD])
 
   const globalMetrics = useMemo(() => {
     const revenue  = podMetrics.reduce((s, p) => s + p.revenue, 0)

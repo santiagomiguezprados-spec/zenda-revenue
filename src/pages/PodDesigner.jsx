@@ -87,12 +87,13 @@ export default function PodDesigner() {
   // ── Store global ──────────────────────────────────────────────────────────
   const store = usePodDesignStore()
   const {
-    pods, assignments, clientAssignments, revenueOverrides,
+    pods, assignments, clientAssignments, revenueOverrides, overheadShareOverrides,
     addPod, removePod, renamePod,
     assignMember, removeMember, setAllocation,
     assignClient, removeClient,
     setRevenueOverride, clearRevenueOverride,
     setOverheadManual, clearOverheadManual,
+    setOverheadShareOverride, clearOverheadShareOverride,
     resetAll, purgeOrphans, restoreConfig,
     _orphanedMembers, _orphanedClients,
     overheadManual: storeOverheadManual,
@@ -346,7 +347,7 @@ export default function PodDesigner() {
     setSavingVersion(true)
     const name = versionName.trim() || `Versión ${new Date().toLocaleDateString('es-AR')} ${new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`
     const config = {
-      pods, assignments, clientAssignments, revenueOverrides,
+      pods, assignments, clientAssignments, revenueOverrides, overheadShareOverrides,
       overheadManual: storeOverheadManual,
     }
     const result = await saveVersion(name, config, userId)
@@ -355,7 +356,7 @@ export default function PodDesigner() {
       await handleLoadVersions()
     }
     setSavingVersion(false)
-  }, [savingVersion, versionName, pods, assignments, clientAssignments, revenueOverrides, storeOverheadManual, userId, handleLoadVersions])
+  }, [savingVersion, versionName, pods, assignments, clientAssignments, revenueOverrides, overheadShareOverrides, storeOverheadManual, userId, handleLoadVersions])
 
   const handleRestoreVersion = useCallback(async (id) => {
     setRestoringId(id)
@@ -405,7 +406,7 @@ export default function PodDesigner() {
       const estructuraUsdSnap = Math.abs(lookerRow.estructura || 0)
 
       const snapshot = {
-        podDesign: { pods, assignments, clientAssignments, revenueOverrides },
+        podDesign: { pods, assignments, clientAssignments, revenueOverrides, overheadShareOverrides },
         teamCosts,
         revenue:       revenueSnap,
         overheadUsd:   globalMetrics.overhead || 0,
@@ -423,7 +424,7 @@ export default function PodDesigner() {
       setClosingPeriod(false)
     }
   }, [selectedMonth, userId, teamMensualData, clientAssignments, lookerData,
-      pods, assignments, revenueOverrides, podMetrics, globalMetrics, markPeriodClosed])
+      pods, assignments, revenueOverrides, overheadShareOverrides, podMetrics, globalMetrics, markPeriodClosed])
 
   const handleReopenPeriod = useCallback(async () => {
     if (!currentPeriodClose?.id || !userId) return
@@ -828,6 +829,12 @@ export default function PodDesigner() {
             const fitScore = podFitForSelected[pod.id]
             const feeBand = podFeeBands[pod.id]
 
+            // Max disponible para el slider de overhead: 100% - lo ya fijado manualmente en otros PODs
+            const overheadUsedElsewhere = Object.entries(overheadShareOverrides)
+              .filter(([pid]) => pid !== pod.id)
+              .reduce((sum, [, pct]) => sum + pct, 0)
+            const maxOverheadSlider = Math.max(0, 100 - overheadUsedElsewhere)
+
             // Estilo del borde según fit del cliente seleccionado
             const hasClientSelected = selected.some(s => s.type === 'client')
             let fitBorderClass = 'border-transparent'
@@ -1100,7 +1107,22 @@ export default function PodDesigner() {
                         </div>
                       )}
                       <div className="flex justify-between"><span>Costo equipo</span><span className="font-semibold">{formatUSD(pod.teamCost)}</span></div>
-                      <div className="flex justify-between"><span>Overhead (proporcional)</span><span className="font-semibold">{formatUSD(pod.overhead)}</span></div>
+                      <div className="flex items-center justify-between gap-2" onClick={e => e.stopPropagation()}>
+                        <span className="flex-shrink-0">Overhead {pod.hasOverheadOverride ? '(manual)' : '(proporcional)'}</span>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <input type="range" min={0} max={maxOverheadSlider} step={1}
+                            value={pod.overheadPct}
+                            onChange={e => setOverheadShareOverride(pod.id, e.target.value)}
+                            className="w-14 accent-accent"
+                            title={`Disponible: ${maxOverheadSlider}% (${overheadUsedElsewhere}% fijado manualmente en otros PODs)`} />
+                          <span className="font-semibold w-9 text-right">{pod.overheadPct}%</span>
+                          {pod.hasOverheadOverride && (
+                            <button onClick={() => clearOverheadShareOverride(pod.id)}
+                              className="text-[9px] text-accent hover:underline flex-shrink-0">auto</button>
+                          )}
+                          <span className="font-semibold w-16 text-right">{formatUSD(pod.overhead)}</span>
+                        </div>
+                      </div>
                       <div className="flex justify-between font-bold text-textPrimary border-t border-gray-100 pt-0.5 mt-0.5">
                         <span>Margen neto</span>
                         <span className={pod.margin >= 0 ? 'text-success' : 'text-danger'}>{formatUSD(pod.margin)}</span>

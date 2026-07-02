@@ -5,7 +5,7 @@
  *
  * Tabla: pod_configs (ver supabase-migration.sql)
  *   - id: 'current' (single-row, siempre la última versión)
- *   - config: jsonb con {pods, assignments, clientAssignments, revenueOverrides, overheadManual}
+ *   - config: jsonb con {pods, assignments, clientAssignments, revenueOverrides, overheadShareOverrides, overheadManual}
  *   - updated_by: uuid del usuario que guardó
  *   - updated_at: timestamp
  */

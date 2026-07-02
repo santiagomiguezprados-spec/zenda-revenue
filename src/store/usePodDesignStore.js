@@ -43,6 +43,7 @@ function renumberState(state) {
   const newAssignments = {}
   const newClientAssignments = {}
   const newRevenueOverrides = {}
+  const newOverheadShareOverrides = {}
 
   oldPods.forEach(p => {
     const newId = idMap[p.id]
@@ -51,6 +52,9 @@ function renumberState(state) {
     if (state.revenueOverrides[p.id] !== undefined) {
       newRevenueOverrides[newId] = state.revenueOverrides[p.id]
     }
+    if (state.overheadShareOverrides?.[p.id] !== undefined) {
+      newOverheadShareOverrides[newId] = state.overheadShareOverrides[p.id]
+    }
   })
 
   return {
@@ -58,6 +62,7 @@ function renumberState(state) {
     assignments: newAssignments,
     clientAssignments: newClientAssignments,
     revenueOverrides: newRevenueOverrides,
+    overheadShareOverrides: newOverheadShareOverrides,
   }
 }
 
@@ -72,6 +77,8 @@ const usePodDesignStore = create(
       clientAssignments: Object.fromEntries(INITIAL_PODS.map(p => [p.id, []])),
       // Revenue overrides manuales por POD
       revenueOverrides: {},
+      // % de overhead manual por POD (pool compartido, igual que allocation de miembros)
+      overheadShareOverrides: {},
       // Overhead manual (null = auto desde sheet)
       overheadManual: null,
       // Ultimo sync timestamp
@@ -97,12 +104,14 @@ const usePodDesignStore = create(
         const { [podId]: _a, ...restA } = s.assignments
         const { [podId]: _c, ...restC } = s.clientAssignments
         const { [podId]: _r, ...restR } = s.revenueOverrides
+        const { [podId]: _o, ...restO } = s.overheadShareOverrides
         const updated = {
           ...s,
           pods: s.pods.filter(p => p.id !== podId),
           assignments: restA,
           clientAssignments: restC,
           revenueOverrides: restR,
+          overheadShareOverrides: restO,
         }
         return renumberState(updated)
       }),
@@ -236,6 +245,27 @@ const usePodDesignStore = create(
       setOverheadManual: (value) => set({ overheadManual: value === null || value === '' ? null : Number(value) }),
       clearOverheadManual: () => set({ overheadManual: null }),
 
+      // ── Overhead share overrides (% manual por POD, pool compartido) ──────
+      setOverheadShareOverride: (podId, value) => set(s => {
+        const requested = Number(value)
+        // Cuánto ya está fijado manualmente en OTROS pods
+        let usedElsewhere = 0
+        Object.entries(s.overheadShareOverrides).forEach(([pid, pct]) => {
+          if (pid !== podId) usedElsewhere += pct
+        })
+        const maxAllowed = Math.max(0, 100 - usedElsewhere)
+        const capped = Math.min(Math.max(0, requested), maxAllowed)
+
+        return {
+          overheadShareOverrides: { ...s.overheadShareOverrides, [podId]: capped },
+        }
+      }),
+
+      clearOverheadShareOverride: (podId) => set(s => {
+        const { [podId]: _, ...rest } = s.overheadShareOverrides
+        return { overheadShareOverrides: rest }
+      }),
+
       // ── SYNC con datos live ────────────────────────────────────────────────
       syncWithLiveData: (teamPool, clientPool) => set(s => {
         // Build lookup maps
@@ -307,6 +337,7 @@ const usePodDesignStore = create(
           assignments: Object.fromEntries(INITIAL_PODS.map(p => [p.id, []])),
           clientAssignments: Object.fromEntries(INITIAL_PODS.map(p => [p.id, []])),
           revenueOverrides: {},
+          overheadShareOverrides: {},
           overheadManual: null,
           _orphanedMembers: [],
           _orphanedClients: [],
@@ -326,6 +357,7 @@ const usePodDesignStore = create(
         assignments: config.assignments || {},
         clientAssignments: config.clientAssignments || {},
         revenueOverrides: config.revenueOverrides || {},
+        overheadShareOverrides: config.overheadShareOverrides || {},
         overheadManual: config.overheadManual ?? null,
       }),
 
@@ -339,6 +371,7 @@ const usePodDesignStore = create(
             assignments: c.assignments || {},
             clientAssignments: c.clientAssignments || {},
             revenueOverrides: c.revenueOverrides || {},
+            overheadShareOverrides: c.overheadShareOverrides || {},
             overheadManual: c.overheadManual ?? null,
             _supabaseLoaded: true,
           })
@@ -358,6 +391,7 @@ const usePodDesignStore = create(
           assignments: s.assignments,
           clientAssignments: s.clientAssignments,
           revenueOverrides: s.revenueOverrides,
+          overheadShareOverrides: s.overheadShareOverrides,
           overheadManual: s.overheadManual,
         }
         await savePodConfig(config, userId)
@@ -372,6 +406,7 @@ const usePodDesignStore = create(
         assignments: state.assignments,
         clientAssignments: state.clientAssignments,
         revenueOverrides: state.revenueOverrides,
+        overheadShareOverrides: state.overheadShareOverrides,
         overheadManual: state.overheadManual,
       }),
     }
@@ -396,6 +431,7 @@ usePodDesignStore.subscribe(
       state.assignments !== prevState.assignments ||
       state.clientAssignments !== prevState.clientAssignments ||
       state.revenueOverrides !== prevState.revenueOverrides ||
+      state.overheadShareOverrides !== prevState.overheadShareOverrides ||
       state.overheadManual !== prevState.overheadManual
     ) {
       scheduleSave()
